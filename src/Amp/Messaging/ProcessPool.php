@@ -2,7 +2,7 @@
 
 namespace Amp\Messaging;
 
-use Amp\Reactor\Reactor;
+use Amp\Reactor;
 
 class ProcessPool {
     

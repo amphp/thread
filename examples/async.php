@@ -1,7 +1,7 @@
 <?php
 
 use Amp\Messaging\ProcessPool,
-    Amp\Reactor\ReactorFactory;
+    Amp\ReactorFactory;
 
 date_default_timezone_set('GMT');
 

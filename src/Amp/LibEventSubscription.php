@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Reactor;
+namespace Amp;
 
 class LibEventSubscription implements Subscription {
     

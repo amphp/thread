@@ -1,14 +1,11 @@
 <?php
 
-use Amp\Reactor\ReactorFactory;
-
-date_default_timezone_set('GMT');
-
 require dirname(__DIR__) . '/autoload.php';
 
-stream_set_blocking(STDIN, FALSE); // Important
+date_default_timezone_set('GMT');
+stream_set_blocking(STDIN, FALSE);
 
-$reactor = (new ReactorFactory)->select();
+$reactor = (new Amp\ReactorFactory)->select();
 
 /**
  * Echo back the data each time there is readable data on STDIN

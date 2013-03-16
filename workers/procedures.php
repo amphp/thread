@@ -1,7 +1,7 @@
 <?php
 
-use Amp\Reactor\Reactor,
-    Amp\Reactor\ReactorFactory,
+use Amp\Reactor,
+    Amp\ReactorFactory,
     Amp\Messaging\FrameParser,
     Amp\Messaging\FrameWriter,
     Amp\Messaging\Message,
