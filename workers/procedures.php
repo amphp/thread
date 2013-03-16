@@ -48,11 +48,11 @@ function main(Message $msg) {
         );
     } elseif (empty($args[0])) {
         throw new ProtocolException(
-            'No procedure specified at index 0'
+            'No procedure specified'
         );
     } elseif (!is_callable($args[0]) || $args[0] == 'main') {
         throw new ProtocolException(
-            'Specified procedure is not available: ' . $args[0]
+            'Specified procedure not available: ' . $args[0]
         );
     } else {
         $procedure = array_shift($args);

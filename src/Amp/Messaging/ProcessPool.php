@@ -4,7 +4,7 @@ namespace Amp\Messaging;
 
 use Amp\Reactor\Reactor;
 
-class ProcessManager {
+class ProcessPool {
     
     private $reactor;
     private $workerSessionFactory;
@@ -13,17 +13,18 @@ class ProcessManager {
     private $workerSessions;
     private $availableWorkerSessions;
     private $writableWorkerSessions;
-    private $workerSessionCallMap;
-    private $callWorkerSessionMap;
+    private $workerSessionJobMap;
+    private $jobWorkerSessionMap;
     private $timeoutSubscriptions;
     
     private $autoWriteSubscription;
     
-    private $runEnvironment;
+    private $workerCmd;
+    private $workerCwd;
     private $writeErrorsTo = STDERR;
-    private $isStarted = FALSE;
     private $readTimeout = 60;
-    private $autoWriteInterval = 0.25;
+    private $autoWriteInterval = 0.025;
+    private $isStarted = FALSE;
     
     function __construct(Reactor $reactor, WorkerSessionFactory $wsf = NULL, MessageFactory $mf = NULL) {
         $this->reactor = $reactor;
@@ -33,22 +34,23 @@ class ProcessManager {
         $this->workerSessions          = new \SplObjectStorage;
         $this->availableWorkerSessions = new \SplObjectStorage;
         $this->writableWorkerSessions  = new \SplObjectStorage;
-        $this->workerSessionCallMap    = new \SplObjectStorage;
-        $this->callWorkerSessionMap    = new \SplObjectStorage;
+        $this->workerSessionJobMap     = new \SplObjectStorage;
+        $this->jobWorkerSessionMap     = new \SplObjectStorage;
         $this->timeoutSubscriptions    = new \SplObjectStorage;
     }
     
-    function start($cmd, $workers = 5, $cwd = NULL) {
+    function start($workerCmd, $workers = 5, $workerCwd = NULL) {
         if ($this->isStarted) {
             throw new \LogicException(
-                'Process manager already running'
+                'Process pool already started'
             );
         }
         
-        $this->runEnvironment = [$cmd, $cwd];
+        $this->workerCmd = $workerCmd;
+        $this->workerCwd = $workerCwd;
         
         for ($i=0; $i < $workers; $i++) {
-            $this->spawnWorkerSession($cmd, $cwd);
+            $this->spawnWorkerSession();
         }
         
         if ($this->autoWriteSubscription) {
@@ -67,47 +69,47 @@ class ProcessManager {
         }
     }
     
-    function dispatch(Call $call, $timeout = 0) {
+    function dispatch(MessageJob $job, $timeout = 0) {
         $timeout = filter_var($timeout, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
         
         $queueKey = uniqid();
-        $this->callQueue[$queueKey] = $call;
+        $this->jobQueue[$queueKey] = $job;
         
         if ($timeout) {
             $timeout = $timeout * $this->reactor->getResolution();
-            $subscription = $this->reactor->once($timeout, function() use ($call, $queueKey) {
-                $this->expireTimeout($call, $queueKey);
+            $subscription = $this->reactor->once($timeout, function() use ($job, $queueKey) {
+                $this->expireTimeout($job, $queueKey);
             });
-            $this->timeoutSubscriptions->attach($call, $subscription);
+            $this->timeoutSubscriptions->attach($job, $subscription);
         }
         
         $this->checkout();
     }
     
-    private function expireTimeout(Call $call, $queueKey) {
-        if (isset($this->callQueue[$queueKey])) {
-            unset($this->callQueue[$queueKey]);
+    private function expireTimeout(MessageJob $job, $queueKey) {
+        if (isset($this->jobQueue[$queueKey])) {
+            unset($this->jobQueue[$queueKey]);
         } else {
-            $workerSession = $this->callWorkerSessionMap->offsetGet($call);
+            $workerSession = $this->jobWorkerSessionMap->offsetGet($job);
             $this->unloadWorkerSession($workerSession);
         }
         
-        $subscription = $this->timeoutSubscriptions->offsetGet($call);
+        $subscription = $this->timeoutSubscriptions->offsetGet($job);
         $subscription->cancel();
-        $this->timeoutSubscriptions->detach($call);
+        $this->timeoutSubscriptions->detach($job);
         
         try {
-            $call->onError(new TimeoutException('Call timeout exceeded'));
+            $job->onError(new TimeoutException('Job timeout exceeded'));
         } catch (\Exception $e) {
             fwrite($this->writeErrorsTo, $e);
         }
     }
     
-    private function cancelTimeout(Call $call) {
-        if ($this->timeoutSubscriptions->contains($call)) {
-            $subscription = $this->timeoutSubscriptions->offsetGet($call);
+    private function cancelTimeout(MessageJob $job) {
+        if ($this->timeoutSubscriptions->contains($job)) {
+            $subscription = $this->timeoutSubscriptions->offsetGet($job);
             $subscription->cancel();
-            $this->timeoutSubscriptions->detach($call);
+            $this->timeoutSubscriptions->detach($job);
         }
     }
     
@@ -120,12 +122,12 @@ class ProcessManager {
         $workerSession = $this->availableWorkerSessions->current();
         $this->availableWorkerSessions->detach($workerSession);
         
-        $call = array_shift($this->callQueue);
+        $job = array_shift($this->jobQueue);
         
-        $this->workerSessionCallMap->attach($workerSession, $call);
-        $this->callWorkerSessionMap->attach($call, $workerSession);
+        $this->workerSessionJobMap->attach($workerSession, $job);
+        $this->jobWorkerSessionMap->attach($job, $workerSession);
         
-        $payload = $call->getPayload();
+        $payload = $job->getPayload();
         $length = strlen($payload);
         $frame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload, $length);
         
@@ -142,8 +144,8 @@ class ProcessManager {
         $this->isStarted = FALSE;
     }
     
-    private function spawnWorkerSession($cmd, $cwd) {
-        $workerSession = $this->workerSessionFactory->__invoke($cmd, $cwd);
+    private function spawnWorkerSession() {
+        $workerSession = $this->workerSessionFactory->__invoke($this->workerCmd, $this->workerCwd);
         
         $readTimeout = $this->readTimeout * $this->reactor->getResolution();
         
@@ -161,11 +163,6 @@ class ProcessManager {
         
         $this->workerSessions->attach($workerSession, [$readSubscription, $errSubscription, $frames = []]);
         $this->availableWorkerSessions->attach($workerSession);
-    }
-    
-    private function respawn() {
-        list($cmd, $cwd) = $this->runEnvironment;
-        $this->spawnWorkerSession($cmd, $cwd);
     }
     
     private function errorRead(WorkerSession $workerSession, $errPipe, $triggeredBy) {
@@ -201,7 +198,7 @@ class ProcessManager {
                 break;
             case Frame::OP_CLOSE:
                 $this->unloadWorkerSession($workerSession);
-                $this->respawn();
+                $this->spawnWorkerSession();
                 break;
             case Frame::OP_ERROR:
                 $this->handleUserlandError($workerSession, new WorkerException(
@@ -222,12 +219,12 @@ class ProcessManager {
         
         if ($frame->isFin()) {
             $msg = $this->messageFactory->__invoke($frames);
-            $call = $this->workerSessionCallMap->offsetGet($workerSession);
+            $job = $this->workerSessionJobMap->offsetGet($workerSession);
             
-            $this->cancelTimeout($call);
+            $this->cancelTimeout($job);
             
             try {
-                $call->onSuccess($msg);
+                $job->onSuccess($msg);
             } catch (\Exception $e) {
                 fwrite($this->writeErrorsTo, $e);
             }
@@ -239,11 +236,11 @@ class ProcessManager {
     }
     
     private function handleUserlandError(WorkerSession $workerSession, \Exception $e) {
-        $call = $this->workerSessionCallMap->offsetGet($workerSession);
-        $this->cancelTimeout($call);
+        $job = $this->workerSessionJobMap->offsetGet($workerSession);
+        $this->cancelTimeout($job);
         
         try {
-            $call->onError($e);
+            $job->onError($e);
         } catch (\Exception $e) {
             fwrite($this->writeErrorsTo, $e);
         }
@@ -253,18 +250,18 @@ class ProcessManager {
     
     private function handleInternalError(WorkerSession $workerSession, \Exception $e) {
         if (!$this->availableWorkerSessions->contains($workerSession)) {
-            $call = $this->workerSessionCallMap->offsetGet($workerSession);
-            $this->cancelTimeout($call);
+            $job = $this->workerSessionJobMap->offsetGet($workerSession);
+            $this->cancelTimeout($job);
             
             try {
-                $call->onError($e);
+                $job->onError($e);
             } catch (\Exception $e) {
                 fwrite($this->writeErrorsTo, $e);
             }
         }
         
         $this->unloadWorkerSession($workerSession);
-        $this->respawn();
+        $this->spawnWorkerSession();
     }
     
     private function write(WorkerSession $workerSession, Frame $frame = NULL) {
@@ -281,13 +278,13 @@ class ProcessManager {
         list($readSub, $errSub) = $this->workerSessions->offsetGet($workerSession);
         $this->workerSessions->attach($workerSession, [$readSub, $errSub, $frames = []]);
         
-        $call = $this->workerSessionCallMap->offsetGet($workerSession);
-        $this->callWorkerSessionMap->detach($call);
-        $this->workerSessionCallMap->detach($workerSession);
+        $job = $this->workerSessionJobMap->offsetGet($workerSession);
+        $this->jobWorkerSessionMap->detach($job);
+        $this->workerSessionJobMap->detach($workerSession);
         
         $this->availableWorkerSessions->attach($workerSession);
         
-        if ($this->callQueue) {
+        if ($this->jobQueue) {
             $this->checkout();
         }
     }
@@ -298,10 +295,10 @@ class ProcessManager {
         $readSubscription->cancel();
         $errorSubscription->cancel();
         
-        if ($this->workerSessionCallMap->contains($workerSession)) {
-            $call = $this->workerSessionCallMap->offsetGet($workerSession);
-            $this->callWorkerSessionMap->detach($call);
-            $this->workerSessionCallMap->detach($workerSession);
+        if ($this->workerSessionJobMap->contains($workerSession)) {
+            $job = $this->workerSessionJobMap->offsetGet($workerSession);
+            $this->jobWorkerSessionMap->detach($job);
+            $this->workerSessionJobMap->detach($workerSession);
         }
         
         $this->workerSessions->detach($workerSession);

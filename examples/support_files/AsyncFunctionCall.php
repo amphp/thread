@@ -1,6 +1,6 @@
 <?php
 
-class AsyncFunctionCall implements Amp\Messaging\Call {
+class AsyncFunctionCall implements Amp\Messaging\MessageJob {
     
     private $payload;
     

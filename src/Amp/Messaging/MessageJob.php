@@ -2,7 +2,7 @@
 
 namespace Amp\Messaging;
 
-interface Call {
+interface MessageJob {
 
     function getPayload();
     function onSuccess(Message $msg);
