@@ -8,18 +8,20 @@ date_default_timezone_set('GMT');
 require dirname(__DIR__) . '/autoload.php';
 require __DIR__ . '/support_files/AsyncFunctionCall.php';
 
-$reactor = (new ReactorFactory)->select();
-$processPool = new ProcessPool($reactor);
-
-$phpBinary    = '/usr/bin/php';
+$phpBinary    = '/usr/bin/php'; // Or something like C:/php/php.exe in windows environments
 $workerScript = dirname(__DIR__) . '/workers/procedures.php';
 $userInclude  = __DIR__ . '/support_files/custom_async_functions.php';
 $workerCmd    = $phpBinary . ' ' . $workerScript . ' ' . $userInclude;
 
+$reactor = (new ReactorFactory)->select();
+$processPool = new ProcessPool($reactor, $workerCmd);
+
+
 /**
  * Fire up 5 worker processes using the worker command we created above
  */
-$processPool->start($workerCmd, $workers = 5);
+$processPool->setMaxWorkers(5);
+$processPool->start();
 
 /**
  * Every three seconds asynchronously call `str_rot13("my test string")`. The processing will
@@ -33,7 +35,7 @@ $reactor->repeat($repeatInterval, function() use ($processPool) {
     $args = 'my test string';
     $call = new AsyncFunctionCall($procedure, $args);
     
-    $processPool->dispatch($call, $timeout = 0);
+    $processPool->call($call, $timeout = 0);
 });
 
 /**
@@ -48,7 +50,7 @@ $reactor->repeat($repeatInterval, function() use ($processPool) {
     $args = 'Dr. Zhivago';
     $call = new AsyncFunctionCall($procedure, $args);
     
-    $processPool->dispatch($call, $timeout = 0);
+    $processPool->call($call, $timeout = 0);
 });
 
 /**

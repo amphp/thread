@@ -1,6 +1,6 @@
 <?php
 
-class AsyncFunctionCall implements Amp\Messaging\MessageJob {
+class AsyncFunctionCall implements Amp\Messaging\Call {
     
     private $payload;
     
@@ -30,12 +30,12 @@ class AsyncFunctionCall implements Amp\Messaging\MessageJob {
         return $this->payload;
     }
     
-    function onSuccess(Amp\Messaging\Message $msg) {
+    function onSuccess($callId, Amp\Messaging\Message $msg) {
         echo "msg rcvd: ";
         var_dump(json_decode($msg->getPayload()));
     }
     
-    function onError(Exception $e) {
+    function onError($callId, Exception $e) {
         echo "error: ", $e->getMessage(), "\n";
     }
     

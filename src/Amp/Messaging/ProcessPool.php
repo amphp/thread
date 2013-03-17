@@ -13,43 +13,54 @@ class ProcessPool {
     private $workerSessions;
     private $availableWorkerSessions;
     private $writableWorkerSessions;
-    private $workerSessionJobMap;
-    private $jobWorkerSessionMap;
+    private $workerSessionCallMap;
+    private $callWorkerSessionMap;
     private $timeoutSubscriptions;
     
     private $autoWriteSubscription;
     
     private $workerCmd;
     private $workerCwd;
+    private $maxWorkers = 5;
+    private $lastCallId = 0;
     private $writeErrorsTo = STDERR;
     private $readTimeout = 60;
     private $autoWriteInterval = 0.025;
     private $isStarted = FALSE;
     
-    function __construct(Reactor $reactor, WorkerSessionFactory $wsf = NULL, MessageFactory $mf = NULL) {
+    function __construct(
+        Reactor $reactor,
+        $workerCmd,
+        WorkerSessionFactory $wsf = NULL,
+        MessageFactory $mf = NULL
+    ) {
         $this->reactor = $reactor;
+        $this->workerCmd = $workerCmd;
         $this->workerSessionFactory = $wsf ?: new WorkerSessionFactory;
         $this->messageFactory = $mf ?: new MessageFactory;
         
         $this->workerSessions          = new \SplObjectStorage;
         $this->availableWorkerSessions = new \SplObjectStorage;
         $this->writableWorkerSessions  = new \SplObjectStorage;
-        $this->workerSessionJobMap     = new \SplObjectStorage;
-        $this->jobWorkerSessionMap     = new \SplObjectStorage;
+        $this->workerSessionCallMap    = new \SplObjectStorage;
+        $this->callWorkerSessionMap    = new \SplObjectStorage;
         $this->timeoutSubscriptions    = new \SplObjectStorage;
     }
     
-    function start($workerCmd, $workers = 5, $workerCwd = NULL) {
+    function setMaxWorkers($maxWorkers) {
+        $this->maxWorkers = (int) $maxWorkers;
+    }
+    
+    function setWorkerCwd($workerCwd) {
+        $this->workerCwd = $workerCwd;
+    }
+    
+    function start() {
         if ($this->isStarted) {
-            throw new \LogicException(
-                'Process pool already started'
-            );
+            return;
         }
         
-        $this->workerCmd = $workerCmd;
-        $this->workerCwd = $workerCwd;
-        
-        for ($i=0; $i < $workers; $i++) {
+        for ($i=0; $i < $this->maxWorkers; $i++) {
             $this->spawnWorkerSession();
         }
         
@@ -69,47 +80,48 @@ class ProcessPool {
         }
     }
     
-    function dispatch(MessageJob $job, $timeout = 0) {
+    function call(Call $call, $timeout = 0) {
         $timeout = filter_var($timeout, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
         
-        $queueKey = uniqid();
-        $this->jobQueue[$queueKey] = $job;
+        if (PHP_INT_MAX == ($callId = ++$this->lastCallId)) {
+            $this->lastCallId = 0;
+        }
+        
+        $this->callQueue[$callId] = $call;
         
         if ($timeout) {
             $timeout = $timeout * $this->reactor->getResolution();
-            $subscription = $this->reactor->once($timeout, function() use ($job, $queueKey) {
-                $this->expireTimeout($job, $queueKey);
+            $subscription = $this->reactor->once($timeout, function() use ($call, $callId) {
+                $this->expireTimeout($call, $callId);
             });
-            $this->timeoutSubscriptions->attach($job, $subscription);
+            $this->timeoutSubscriptions->attach($call, $subscription);
         }
         
         $this->checkout();
     }
     
-    private function expireTimeout(MessageJob $job, $queueKey) {
-        if (isset($this->jobQueue[$queueKey])) {
-            unset($this->jobQueue[$queueKey]);
+    private function expireTimeout(Call $call, $callId) {
+        if (isset($this->callQueue[$callId])) {
+            unset($this->callQueue[$callId]);
         } else {
-            $workerSession = $this->jobWorkerSessionMap->offsetGet($job);
+            $workerSession = $this->callWorkerSessionMap->offsetGet($call);
             $this->unloadWorkerSession($workerSession);
         }
         
-        $subscription = $this->timeoutSubscriptions->offsetGet($job);
+        $subscription = $this->timeoutSubscriptions->offsetGet($call);
         $subscription->cancel();
-        $this->timeoutSubscriptions->detach($job);
+        $this->timeoutSubscriptions->detach($call);
         
-        try {
-            $job->onError(new TimeoutException('Job timeout exceeded'));
-        } catch (\Exception $e) {
-            fwrite($this->writeErrorsTo, $e);
-        }
+        $call->onError($callId, new TimeoutException(
+            'Job timeout exceeded'
+        ));
     }
     
-    private function cancelTimeout(MessageJob $job) {
-        if ($this->timeoutSubscriptions->contains($job)) {
-            $subscription = $this->timeoutSubscriptions->offsetGet($job);
+    private function cancelTimeout(Call $call) {
+        if ($this->timeoutSubscriptions->contains($call)) {
+            $subscription = $this->timeoutSubscriptions->offsetGet($call);
             $subscription->cancel();
-            $this->timeoutSubscriptions->detach($job);
+            $this->timeoutSubscriptions->detach($call);
         }
     }
     
@@ -122,12 +134,13 @@ class ProcessPool {
         $workerSession = $this->availableWorkerSessions->current();
         $this->availableWorkerSessions->detach($workerSession);
         
-        $job = array_shift($this->jobQueue);
+        $callId = key($this->callQueue);
+        $call = array_shift($this->callQueue);
         
-        $this->workerSessionJobMap->attach($workerSession, $job);
-        $this->jobWorkerSessionMap->attach($job, $workerSession);
+        $this->workerSessionCallMap->attach($workerSession, [$call, $callId]);
+        $this->callWorkerSessionMap->attach($call, $workerSession);
         
-        $payload = $job->getPayload();
+        $payload = $call->getPayload();
         $length = strlen($payload);
         $frame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload, $length);
         
@@ -214,50 +227,35 @@ class ProcessPool {
     
     private function receiveDataFrame(WorkerSession $workerSession, Frame $frame) {
         list($readSub, $errSub, $frames) = $this->workerSessions->offsetGet($workerSession);
+        list($call, $callId) = $this->workerSessionCallMap->offsetGet($workerSession);
         
         $frames[] = $frame;
         
         if ($frame->isFin()) {
+            $this->cancelTimeout($call);
             $msg = $this->messageFactory->__invoke($frames);
-            $job = $this->workerSessionJobMap->offsetGet($workerSession);
-            
-            $this->cancelTimeout($job);
-            
-            try {
-                $job->onSuccess($msg);
-            } catch (\Exception $e) {
-                fwrite($this->writeErrorsTo, $e);
-            }
-            
+            $call->onSuccess($callId, $msg);
             $this->checkin($workerSession);
+        } elseif ($call instanceof OnFrameCall) {
+            $call->onFrame($frame);
+            $this->workerSessions->attach($workerSession, [$readSub, $errSub, $frames]);
         } else {
             $this->workerSessions->attach($workerSession, [$readSub, $errSub, $frames]);
         }
     }
     
     private function handleUserlandError(WorkerSession $workerSession, \Exception $e) {
-        $job = $this->workerSessionJobMap->offsetGet($workerSession);
-        $this->cancelTimeout($job);
-        
-        try {
-            $job->onError($e);
-        } catch (\Exception $e) {
-            fwrite($this->writeErrorsTo, $e);
-        }
-        
+        list($call, $callId) = $this->workerSessionCallMap->offsetGet($workerSession);
+        $this->cancelTimeout($call);
+        $call->onError($callId, $e);
         $this->checkin($workerSession);
     }
     
     private function handleInternalError(WorkerSession $workerSession, \Exception $e) {
         if (!$this->availableWorkerSessions->contains($workerSession)) {
-            $job = $this->workerSessionJobMap->offsetGet($workerSession);
-            $this->cancelTimeout($job);
-            
-            try {
-                $job->onError($e);
-            } catch (\Exception $e) {
-                fwrite($this->writeErrorsTo, $e);
-            }
+            list($call, $callId) = $this->workerSessionCallMap->offsetGet($workerSession);
+            $this->cancelTimeout($call);
+            $call->onError($callId, $e);
         }
         
         $this->unloadWorkerSession($workerSession);
@@ -278,13 +276,13 @@ class ProcessPool {
         list($readSub, $errSub) = $this->workerSessions->offsetGet($workerSession);
         $this->workerSessions->attach($workerSession, [$readSub, $errSub, $frames = []]);
         
-        $job = $this->workerSessionJobMap->offsetGet($workerSession);
-        $this->jobWorkerSessionMap->detach($job);
-        $this->workerSessionJobMap->detach($workerSession);
+        $call = $this->workerSessionCallMap->offsetGet($workerSession)[0];
+        $this->callWorkerSessionMap->detach($call);
+        $this->workerSessionCallMap->detach($workerSession);
         
         $this->availableWorkerSessions->attach($workerSession);
         
-        if ($this->jobQueue) {
+        if ($this->callQueue) {
             $this->checkout();
         }
     }
@@ -295,10 +293,10 @@ class ProcessPool {
         $readSubscription->cancel();
         $errorSubscription->cancel();
         
-        if ($this->workerSessionJobMap->contains($workerSession)) {
-            $job = $this->workerSessionJobMap->offsetGet($workerSession);
-            $this->jobWorkerSessionMap->detach($job);
-            $this->workerSessionJobMap->detach($workerSession);
+        if ($this->workerSessionCallMap->contains($workerSession)) {
+            $call = $this->workerSessionCallMap->offsetGet($workerSession)[0];
+            $this->callWorkerSessionMap->detach($call);
+            $this->workerSessionCallMap->detach($workerSession);
         }
         
         $this->workerSessions->detach($workerSession);

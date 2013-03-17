@@ -2,7 +2,7 @@
 
 namespace Amp\Messaging;
 
-class Message implements \Countable {
+class Message {
     
     private $frames;
     private $frameCount = 0;
@@ -22,7 +22,6 @@ class Message implements \Countable {
         } else {
             for ($i=1; $i < $this->frameCount; $i++) {
                 $this->length += $frames[$i]->getLength();
-                
             }
         }
     }
@@ -35,10 +34,6 @@ class Message implements \Countable {
         } else {
             $this->payloadStream = $payload;
         }
-    }
-    
-    function count() {
-        return $this->frameCount;
     }
     
     function getFrames() {
