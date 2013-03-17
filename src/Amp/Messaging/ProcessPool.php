@@ -4,6 +4,35 @@ namespace Amp\Messaging;
 
 use Amp\Reactor;
 
+/*
+// AMP - Async Messaging Platform
+// AMP - Aerys Messaging Protocol
+// AMP - Async My PHP
+// AMP - AMP Messaging Protocol (recursive)
+
+interface Amp\Async\CallDispatcher {
+    function start();
+    function call(Call $call); // Returns the call ID referenced by onSuccess and onError callbacks
+    function stop();
+}
+
+interface Amp\Async\Call {
+    function getProcedure();
+    function getWorkload();
+    function onSuccess($callId, Message $msg);
+    function onError($callId, \Exception $e);
+}
+
+interface Amp\Async\PartialCall extends Call {
+    function onPartial($callId, $data);
+}
+
+class Amp\Async\ProcPoolDispatcher implements CallDispatcher {}
+class Amp\Async\GearmanDispatcher implements CallDispatcher {}
+
+*/
+
+
 class ProcessPool {
     
     private $reactor;
@@ -22,10 +51,11 @@ class ProcessPool {
     private $workerCmd;
     private $workerCwd;
     private $maxWorkers = 5;
-    private $lastCallId = 0;
-    private $writeErrorsTo = STDERR;
+    
+    private $callTimeout = 10;
     private $readTimeout = 60;
     private $autoWriteInterval = 0.025;
+    private $writeErrorsTo = STDERR;
     private $isStarted = FALSE;
     
     function __construct(
@@ -45,6 +75,9 @@ class ProcessPool {
         $this->workerSessionCallMap    = new \SplObjectStorage;
         $this->callWorkerSessionMap    = new \SplObjectStorage;
         $this->timeoutSubscriptions    = new \SplObjectStorage;
+        
+        $this->callTimeout = $this->callTimeout * $this->reactor->getResolution();
+        $this->readTimeout = $this->readTimeout * $this->reactor->getResolution();
     }
     
     function setMaxWorkers($maxWorkers) {
@@ -53,6 +86,15 @@ class ProcessPool {
     
     function setWorkerCwd($workerCwd) {
         $this->workerCwd = $workerCwd;
+    }
+    
+    function setCallTimeout($seconds) {
+        $seconds = filter_var($seconds, FILTER_VALIDATE_INT, ['options' => [
+            'min_range' => 0,
+            'default' => 10
+        ]]);
+        
+        $this->callTimeout = $seconds * $this->reactor->getResolution();
     }
     
     function start() {
@@ -68,36 +110,49 @@ class ProcessPool {
             $this->autoWriteSubscription->enable();
         } else {
             $autoWriteInterval = $this->autoWriteInterval * $this->reactor->getResolution();
-            $this->autoWriteSubscription = $this->reactor->repeat($autoWriteInterval, [$this, 'autoWrite']);
+            $this->autoWriteSubscription = $this->reactor->repeat($autoWriteInterval, function() {
+                foreach ($this->writableWorkerSessions as $workerSession) {
+                    $this->write($workerSession);
+                }
+            });
         }
         
         $this->isStarted = TRUE;
     }
     
-    function autoWrite() {
-        foreach ($this->writableWorkerSessions as $workerSession) {
-            $this->write($workerSession);
-        }
+    private function spawnWorkerSession() {
+        $workerSession = $this->workerSessionFactory->__invoke($this->workerCmd, $this->workerCwd);
+        
+        $errSubscription = $this->reactor->onReadable(
+            $workerSession->getErrorPipe(),
+            function($pipe, $trigger) use ($workerSession) { $this->errorRead($workerSession, $pipe, $trigger); },
+            $this->readTimeout
+        );
+        
+        $readSubscription = $this->reactor->onReadable(
+            $workerSession->getReadPipe(),
+            function($pipe, $trigger) use ($workerSession) { $this->read($workerSession, $trigger); },
+            $this->readTimeout
+        );
+        
+        $this->workerSessions->attach($workerSession, [$readSubscription, $errSubscription, $frames = []]);
+        $this->availableWorkerSessions->attach($workerSession);
     }
     
-    function call(Call $call, $timeout = 0) {
-        $timeout = filter_var($timeout, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
-        
-        if (PHP_INT_MAX == ($callId = ++$this->lastCallId)) {
-            $this->lastCallId = 0;
-        }
-        
+    function call(Call $call) {
+        $callId = uniqid();
         $this->callQueue[$callId] = $call;
         
-        if ($timeout) {
-            $timeout = $timeout * $this->reactor->getResolution();
-            $subscription = $this->reactor->once($timeout, function() use ($call, $callId) {
+        if ($this->callTimeout) {
+            $subscription = $this->reactor->once($this->callTimeout, function() use ($call, $callId) {
                 $this->expireTimeout($call, $callId);
             });
             $this->timeoutSubscriptions->attach($call, $subscription);
         }
         
         $this->checkout();
+        
+        return $callId;
     }
     
     private function expireTimeout(Call $call, $callId) {
@@ -115,14 +170,6 @@ class ProcessPool {
         $call->onError($callId, new TimeoutException(
             'Job timeout exceeded'
         ));
-    }
-    
-    private function cancelTimeout(Call $call) {
-        if ($this->timeoutSubscriptions->contains($call)) {
-            $subscription = $this->timeoutSubscriptions->offsetGet($call);
-            $subscription->cancel();
-            $this->timeoutSubscriptions->detach($call);
-        }
     }
     
     private function checkout() {
@@ -147,37 +194,6 @@ class ProcessPool {
         $this->write($workerSession, $frame);
     }
     
-    function stop() {
-        $this->autoWriteSubscription->disable();
-        
-        foreach ($this->workerSessions as $workerSession) {
-            $this->unloadWorkerSession($workerSession);
-        }
-        
-        $this->isStarted = FALSE;
-    }
-    
-    private function spawnWorkerSession() {
-        $workerSession = $this->workerSessionFactory->__invoke($this->workerCmd, $this->workerCwd);
-        
-        $readTimeout = $this->readTimeout * $this->reactor->getResolution();
-        
-        $errSubscription = $this->reactor->onReadable(
-            $workerSession->getErrorPipe(),
-            function($pipe, $trigger) use ($workerSession) { $this->errorRead($workerSession, $pipe, $trigger); },
-            $readTimeout
-        );
-        
-        $readSubscription = $this->reactor->onReadable(
-            $workerSession->getReadPipe(),
-            function($pipe, $trigger) use ($workerSession) { $this->read($workerSession, $trigger); },
-            $readTimeout
-        );
-        
-        $this->workerSessions->attach($workerSession, [$readSubscription, $errSubscription, $frames = []]);
-        $this->availableWorkerSessions->attach($workerSession);
-    }
-    
     private function errorRead(WorkerSession $workerSession, $errPipe, $triggeredBy) {
         if ($triggeredBy != Reactor::TIMEOUT
             && FALSE === @stream_copy_to_stream($errPipe, $this->writeErrorsTo)
@@ -189,20 +205,20 @@ class ProcessPool {
     }
     
     private function read(WorkerSession $workerSession, $triggeredBy) {
-        if ($triggeredBy == Reactor::TIMEOUT) {
-            return;
-        }
-        
-        try {
-            if (!$frame = $workerSession->parse()) {
-                return;
+        if ($triggeredBy != Reactor::TIMEOUT) {
+            try {
+                while ($frame = $workerSession->parse()) {
+                    $this->dispatchParsedFrame($workerSession, $frame);
+                }
+            } catch (ResourceException $e) {
+                $this->handleInternalError($workerSession, $e);
+            } catch (\RuntimeException $e) {
+                $this->handleInternalError($workerSession, $e);
             }
-        } catch (ResourceException $e) {
-            return $this->handleInternalError($workerSession, $e);
-        } catch (\RuntimeException $e) {
-            return $this->handleInternalError($workerSession, $e);
-        }    
-        
+        }
+    }
+    
+    private function dispatchParsedFrame(WorkerSession $workerSession, Frame $frame) {
         $opcode = $frame->getOpcode();
         
         switch($opcode) {
@@ -237,10 +253,18 @@ class ProcessPool {
             $call->onSuccess($callId, $msg);
             $this->checkin($workerSession);
         } elseif ($call instanceof OnFrameCall) {
-            $call->onFrame($frame);
+            $call->onFrame($callId, $frame);
             $this->workerSessions->attach($workerSession, [$readSub, $errSub, $frames]);
         } else {
             $this->workerSessions->attach($workerSession, [$readSub, $errSub, $frames]);
+        }
+    }
+    
+    private function cancelTimeout(Call $call) {
+        if ($this->timeoutSubscriptions->contains($call)) {
+            $subscription = $this->timeoutSubscriptions->offsetGet($call);
+            $subscription->cancel();
+            $this->timeoutSubscriptions->detach($call);
         }
     }
     
@@ -307,6 +331,16 @@ class ProcessPool {
     function __destruct() {
         $this->stop();
         $this->autoWriteSubscription->cancel();
+    }
+    
+    function stop() {
+        $this->autoWriteSubscription->disable();
+        
+        foreach ($this->workerSessions as $workerSession) {
+            $this->unloadWorkerSession($workerSession);
+        }
+        
+        $this->isStarted = FALSE;
     }
     
 }

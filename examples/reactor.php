@@ -17,20 +17,14 @@ $reactor->onReadable(STDIN, function($stdin, $trigger) {
 });
 
 /**
- * Output "Zanzibar!" every three seconds
- */
-$repeatInterval = 3 * $reactor->getResolution();
-$reactor->repeat($repeatInterval, function() {
-    echo "Zanzibar!\n";
-});
-
-/**
  * Stop the program after 15 seconds
  */
 $stopAfter = 15 * $reactor->getResolution();
 $reactor->once($stopAfter, function() use ($reactor) {
    $reactor->stop();
 });
+
+echo "Each input line will be echoed back to you for the next 15 seconds ...\n\n";
 
 $reactor->run();
 

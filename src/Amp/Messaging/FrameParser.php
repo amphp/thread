@@ -42,20 +42,24 @@ class FrameParser {
     function setSwapDir($dir) {
         $this->swapDir = $dir;
     }
-
+    
     function parse() {
         $data = fread($this->inputStream, $this->granularity);
         $emptyData = !($data || $data === '0');
+        $emptyBuffer = !isset($this->readBuffer[0]);
         
-        if ($emptyData && (!is_resource($this->inputStream) || feof($this->inputStream))) {
+        if ($emptyData
+            && $emptyBuffer
+            && (!is_resource($this->inputStream) || feof($this->inputStream))
+        ) {
             throw new ResourceException(
                 'Input stream has gone away'
             );
-        } elseif ($emptyData) {
+        } elseif ($emptyData && $emptyBuffer) {
             goto more_data_needed;
+        } else {
+            $this->readBuffer .= $data;
         }
-        
-        $this->readBuffer .= $data;
         
         switch ($this->state) {
             case self::START:
