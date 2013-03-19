@@ -31,11 +31,6 @@ class TcpServerCrypto extends TcpServer {
         'certAuthorityDir'   => 'capath'
     ];
     
-    function __construct(Reactor $reactor, $address, $port) {
-        parent::__construct($reactor, $address, $port);
-        $this->handshakeTimeout = $this->handshakeTimeout * $reactor->getResolution();
-    }
-    
     function setOption($option, $value) {
         if (!isset($value)) {
             return;
@@ -47,7 +42,7 @@ class TcpServerCrypto extends TcpServer {
         } elseif ($option == 'cryptoType') {
             $this->cryptoType = $value;
         } elseif ($option == 'handshakeTimeout') {
-            $this->handshakeTimeout = (int) ($value * $this->reactor->getResolution());
+            $this->handshakeTimeout = (int) $value;
         } else {
             $this->context[$option] = $value;
         }

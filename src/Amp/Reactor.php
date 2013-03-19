@@ -11,12 +11,11 @@ interface Reactor {
     function tick();
     function run();
     function stop();
-    function once($interval, callable $callback);
+    function once($delay, callable $callback);
     function repeat($interval, callable $callback);
     function onReadable($ioStream, callable $callback, $timeout);
     function onWritable($ioStream, callable $callback, $timeout);
     function cancel(Subscription $subscription);
-    function getResolution();
     
 }
 

@@ -3,6 +3,8 @@
 namespace Amp\Async\Processes;
 
 use Amp\Reactor,
+    Amp\Async\Task,
+    Amp\Async\CallResult,
     Amp\Async\Dispatchable,
     Amp\Async\IncrementalDispatchable,
     Amp\Async\TimeoutException,
@@ -48,9 +50,6 @@ class ProcessDispatcher {
         $this->workerSessionCallMap    = new \SplObjectStorage;
         $this->callWorkerSessionMap    = new \SplObjectStorage;
         $this->timeoutSubscriptions    = new \SplObjectStorage;
-        
-        $this->responseTimeout = $this->responseTimeout * $this->reactor->getResolution();
-        $this->readTimeout = $this->readTimeout * $this->reactor->getResolution();
     }
     
     function setMaxWorkers($maxWorkers) {
@@ -62,12 +61,10 @@ class ProcessDispatcher {
     }
     
     function setResponseTimeout($seconds) {
-        $seconds = filter_var($seconds, FILTER_VALIDATE_INT, ['options' => [
+        $this->responseTimeout = filter_var($seconds, FILTER_VALIDATE_INT, ['options' => [
             'min_range' => 0,
             'default' => 30
         ]]);
-        
-        $this->responseTimeout = $seconds * $this->reactor->getResolution();
     }
     
     function start() {
@@ -82,8 +79,7 @@ class ProcessDispatcher {
         if ($this->autoWriteSubscription) {
             $this->autoWriteSubscription->enable();
         } else {
-            $autoWriteInterval = $this->autoWriteInterval * $this->reactor->getResolution();
-            $this->autoWriteSubscription = $this->reactor->repeat($autoWriteInterval, function() {
+            $this->autoWriteSubscription = $this->reactor->repeat($this->autoWriteInterval, function() {
                 foreach ($this->writableWorkerSessions as $workerSession) {
                     $this->write($workerSession);
                 }
@@ -112,7 +108,25 @@ class ProcessDispatcher {
         $this->availableWorkerSessions->attach($workerSession);
     }
     
-    function call(Dispatchable $call) {
+    function call(callable $onResult, $procedure, $varArgs = NULL) {
+        $workload = array_slice(func_get_args(), 2);
+        
+        $onSuccess = function($result) use ($onResult) {
+            $callResult = new CallResult($result, $error = NULL);
+            $onResult($callResult);
+        };
+        
+        $onError = function($error) use ($onResult) {
+            $callResult = new CallResult($result = NULL, $error);
+            $onResult($callResult);
+        };
+        
+        $task = new Task($procedure, $workload, $onSuccess, $onError);
+        
+        return $this->dispatch($task);
+    }
+    
+    function dispatch(Dispatchable $call) {
         $callId = uniqid();
         $this->callQueue[$callId] = $call;
         

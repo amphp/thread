@@ -32,7 +32,7 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
         $frameParser = new FrameParser($inputStream);
         $parseResult = $frameParser->parse();
         
-        $this->assertInstanceOf('Amp\\Messaging\\Frame', $parseResult);
+        $this->assertInstanceOf('Amp\\Async\Processes\\Io\\Frame', $parseResult);
         $this->assertEquals($frame->getPayload(), $parseResult->getPayload());
         $this->assertEquals($frame->getLength(), $parseResult->getLength());
         $this->assertEquals($frame->getOpcode(), $parseResult->getOpcode());

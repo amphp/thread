@@ -19,8 +19,7 @@ $reactor->onReadable(STDIN, function($stdin, $trigger) {
 /**
  * Stop the program after 15 seconds
  */
-$stopAfter = 15 * $reactor->getResolution();
-$reactor->once($stopAfter, function() use ($reactor) {
+$reactor->once($stopAfter = 15, function() use ($reactor) {
    $reactor->stop();
 });
 

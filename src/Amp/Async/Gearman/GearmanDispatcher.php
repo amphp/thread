@@ -10,7 +10,8 @@ use Amp\Async\Dispatcher,
  */
 class GearmanDispatcher implements Dispatcher {
 
-    function call(Dispatchable $task) {}
+    function call(callable $onResult, $procedureName, $varArgs = NULL) {}
+    function dispatch(Dispatchable $task) {}
     function start() {}
     function stop() {}
     

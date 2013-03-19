@@ -4,28 +4,29 @@ namespace Amp;
 
 class LibEventReactor implements Reactor {
     
+    const GC_INTERVAL = 1;
+    
     private $base;
     private $subscriptions;
-    private $garbage = [];
-    private $garbageCollectionInterval;
     private $resolution = 1000000;
+    private $garbage = [];
     
-    function __construct($gcInterval = NULL) {
+    function __construct() {
         $this->base = event_base_new();
         $this->subscriptions = new \SplObjectStorage;
-        
-        $this->garbageCollectionInterval = $gcInterval
-            ? $gcInterval * $this->resolution
-            : 2 * $this->resolution;
-        
+        $this->registerGarbageCollector();
+    }
+    
+    private function registerGarbageCollector() {
         $garbageEvent = event_new();
         event_timer_set($garbageEvent, [$this, 'collectGarbage'], $garbageEvent);
         event_base_set($garbageEvent, $this->base);
-        event_add($garbageEvent, $this->garbageCollectionInterval);
+        event_add($garbageEvent, self::GC_INTERVAL * $this->resolution);
     }
     
-    function getResolution() {
-        return $this->resolution;
+    private function collectGarbage($nullFd, $flags, $garbageEvent) {
+        $this->garbage = [];
+        event_add($garbageEvent, self::GC_INTERVAL * $this->resolution);
     }
     
     function tick() {
@@ -34,16 +35,24 @@ class LibEventReactor implements Reactor {
     
     function run() {
         event_base_loop($this->base);
+        $this->garbage = [];
     }
     
     function stop() {
         event_base_loopexit($this->base);
+        $this->garbage = [];
     }
     
-    function once($interval, callable $callback) {
+    function once($delay, callable $callback) {
         $event = event_new();
+        $delay = ($delay > 0) ? ($delay * $this->resolution) : 0;
         
-        $wrapper = function() use ($callback) {
+        $subscription = new LibEventSubscription($this, $event, $delay);
+        $this->subscriptions->attach($subscription, $event);
+        
+        $wrapper = function() use ($callback, $subscription) {
+            $this->cancel($subscription);
+            
             try {
                 $callback();
             } catch (\Exception $e) {
@@ -54,16 +63,14 @@ class LibEventReactor implements Reactor {
         
         event_timer_set($event, $wrapper);
         event_base_set($event, $this->base);
-        event_add($event, $interval);
-        
-        $subscription = new LibEventSubscription($this, $event, $interval);
-        $this->subscriptions->attach($subscription, $event);
+        event_add($event, $delay);
         
         return $subscription;
     }
     
     function repeat($interval, callable $callback) {
         $event = event_new();
+        $interval = ($interval > 0) ? ($interval * $this->resolution) : 0;
         
         $wrapper = function() use ($callback, $event, $interval) {
             try {
@@ -95,6 +102,7 @@ class LibEventReactor implements Reactor {
     
     private function subscribe($ioStream, $flags, callable $callback, $timeout) {
         $event = event_new();
+        $timeout = ($timeout >= 0) ? ($timeout * $this->resolution) : -1;
         
         $wrapper = function($ioStream, $triggeredBy) use ($callback) {
             try {
@@ -124,11 +132,6 @@ class LibEventReactor implements Reactor {
         $subscription->disable();
         $this->subscriptions->detach($subscription);
         $this->garbage[] = $subscription;
-    }
-    
-    private function collectGarbage($nullFd, $flags, $garbageEvent) {
-        $this->garbage = [];
-        event_add($garbageEvent, $this->garbageCollectionInterval);
     }
     
 }

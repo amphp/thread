@@ -40,17 +40,15 @@ $hello = new MyAsyncFunctionCall('my_hello_world_function', "@Lusitanian's Mom")
 /**
  * Alternate asynchronous calls to native str_rot13() and userland my_hello_world_function()
  */
-$interval = 1 * $reactor->getResolution();
-$reactor->repeat($interval, function() use ($dispatcher, $rot13, $hello) {
+$reactor->repeat($interval = 1, function() use ($dispatcher, $rot13, $hello) {
     $call = (time() % 2 == 0) ? $rot13 : $hello;
-    $dispatcher->call($call);
+    $dispatcher->dispatch($call);
 });
 
 /**
  * Stop this spurious example after 10 seconds
  */
-$stopAfter = 10 * $reactor->getResolution();
-$reactor->once($stopAfter, function() use ($reactor) {
+$reactor->once($stopAfter = 10, function() use ($reactor) {
    $reactor->stop();
 });
 
