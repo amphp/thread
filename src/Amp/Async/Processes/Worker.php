@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Messaging;
+namespace Amp\Async\Processes;
 
 class Worker {
     
@@ -50,7 +50,7 @@ class Worker {
     function __destruct() {
         foreach ($this->pipes as $pipe) {
             if (is_resource($pipe)) {
-                fclose($pipe);
+                @fclose($pipe);
             }
         }
         

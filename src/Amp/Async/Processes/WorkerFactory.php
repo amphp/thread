@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Messaging;
+namespace Amp\Async\Processes;
 
 class WorkerFactory {
 

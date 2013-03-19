@@ -1,43 +1,18 @@
 <?php
 
-namespace Amp\Messaging;
+namespace Amp\Async\Processes;
 
-use Amp\Reactor;
+use Amp\Reactor,
+    Amp\Async\Dispatchable,
+    Amp\Async\IncrementalDispatchable,
+    Amp\Async\TimeoutException,
+    Amp\Async\Processes\Io\Frame,
+    Amp\Async\Processes\Io\Message;
 
-/*
-// AMP - Async Messaging Platform
-// AMP - Aerys Messaging Protocol
-// AMP - Async My PHP
-// AMP - AMP Messaging Protocol (recursive)
-
-interface Amp\Async\CallDispatcher {
-    function start();
-    function call(Call $call); // Returns the call ID referenced by onSuccess and onError callbacks
-    function stop();
-}
-
-interface Amp\Async\Call {
-    function getProcedure();
-    function getWorkload();
-    function onSuccess($callId, Message $msg);
-    function onError($callId, \Exception $e);
-}
-
-interface Amp\Async\PartialCall extends Call {
-    function onPartial($callId, $data);
-}
-
-class Amp\Async\ProcPoolDispatcher implements CallDispatcher {}
-class Amp\Async\GearmanDispatcher implements CallDispatcher {}
-
-*/
-
-
-class ProcessPool {
+class ProcessDispatcher {
     
     private $reactor;
     private $workerSessionFactory;
-    private $messageFactory;
     
     private $workerSessions;
     private $availableWorkerSessions;
@@ -52,7 +27,7 @@ class ProcessPool {
     private $workerCwd;
     private $maxWorkers = 5;
     
-    private $callTimeout = 10;
+    private $responseTimeout = 30;
     private $readTimeout = 60;
     private $autoWriteInterval = 0.025;
     private $writeErrorsTo = STDERR;
@@ -61,13 +36,11 @@ class ProcessPool {
     function __construct(
         Reactor $reactor,
         $workerCmd,
-        WorkerSessionFactory $wsf = NULL,
-        MessageFactory $mf = NULL
+        WorkerSessionFactory $wsf = NULL
     ) {
         $this->reactor = $reactor;
         $this->workerCmd = $workerCmd;
         $this->workerSessionFactory = $wsf ?: new WorkerSessionFactory;
-        $this->messageFactory = $mf ?: new MessageFactory;
         
         $this->workerSessions          = new \SplObjectStorage;
         $this->availableWorkerSessions = new \SplObjectStorage;
@@ -76,7 +49,7 @@ class ProcessPool {
         $this->callWorkerSessionMap    = new \SplObjectStorage;
         $this->timeoutSubscriptions    = new \SplObjectStorage;
         
-        $this->callTimeout = $this->callTimeout * $this->reactor->getResolution();
+        $this->responseTimeout = $this->responseTimeout * $this->reactor->getResolution();
         $this->readTimeout = $this->readTimeout * $this->reactor->getResolution();
     }
     
@@ -88,13 +61,13 @@ class ProcessPool {
         $this->workerCwd = $workerCwd;
     }
     
-    function setCallTimeout($seconds) {
+    function setResponseTimeout($seconds) {
         $seconds = filter_var($seconds, FILTER_VALIDATE_INT, ['options' => [
             'min_range' => 0,
-            'default' => 10
+            'default' => 30
         ]]);
         
-        $this->callTimeout = $seconds * $this->reactor->getResolution();
+        $this->responseTimeout = $seconds * $this->reactor->getResolution();
     }
     
     function start() {
@@ -139,12 +112,12 @@ class ProcessPool {
         $this->availableWorkerSessions->attach($workerSession);
     }
     
-    function call(Call $call) {
+    function call(Dispatchable $call) {
         $callId = uniqid();
         $this->callQueue[$callId] = $call;
         
-        if ($this->callTimeout) {
-            $subscription = $this->reactor->once($this->callTimeout, function() use ($call, $callId) {
+        if ($this->responseTimeout) {
+            $subscription = $this->reactor->once($this->responseTimeout, function() use ($call, $callId) {
                 $this->expireTimeout($call, $callId);
             });
             $this->timeoutSubscriptions->attach($call, $subscription);
@@ -155,7 +128,7 @@ class ProcessPool {
         return $callId;
     }
     
-    private function expireTimeout(Call $call, $callId) {
+    private function expireTimeout(Dispatchable $call, $callId) {
         if (isset($this->callQueue[$callId])) {
             unset($this->callQueue[$callId]);
         } else {
@@ -167,9 +140,7 @@ class ProcessPool {
         $subscription->cancel();
         $this->timeoutSubscriptions->detach($call);
         
-        $call->onError($callId, new TimeoutException(
-            'Job timeout exceeded'
-        ));
+        $call->onError(new TimeoutException, $callId);
     }
     
     private function checkout() {
@@ -187,7 +158,8 @@ class ProcessPool {
         $this->workerSessionCallMap->attach($workerSession, [$call, $callId]);
         $this->callWorkerSessionMap->attach($call, $workerSession);
         
-        $payload = $call->getPayload();
+        $payload = [$call->getProcedure(), $call->getWorkload()];
+        $payload = serialize($payload);
         $length = strlen($payload);
         $frame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload, $length);
         
@@ -245,22 +217,36 @@ class ProcessPool {
         list($readSub, $errSub, $frames) = $this->workerSessions->offsetGet($workerSession);
         list($call, $callId) = $this->workerSessionCallMap->offsetGet($workerSession);
         
-        $frames[] = $frame;
+        $isFin = $frame->isFin();
+        $isIncremental = ($call instanceof IncrementalDispatchable);
         
-        if ($frame->isFin()) {
+        if ($isIncremental && $isFin) {
             $this->cancelTimeout($call);
-            $msg = $this->messageFactory->__invoke($frames);
-            $call->onSuccess($callId, $msg);
-            $this->checkin($workerSession);
-        } elseif ($call instanceof OnFrameCall) {
-            $call->onFrame($callId, $frame);
-            $this->workerSessions->attach($workerSession, [$readSub, $errSub, $frames]);
+            $payload = $frame->getPayload();
+            $call->onSuccess($payload, $callId);
+        } elseif ($isIncremental) {
+            $payload = $frame->getPayload();
+            $call->onIncrement($payload, $callId);
+        } elseif ($isFin) {
+            $frames[] = $frame;
+            $this->cancelTimeout($call);
+            $msg = new Message($frames);
+            $result = unserialize($msg->getPayload());
+            
+            try {
+                $call->onSuccess($result, $callId);
+                $this->checkin($workerSession);
+            } catch (\Exception $e) {
+                $this->checkin($workerSession);
+                throw $e;
+            }
         } else {
+            $frames[] = $frame;
             $this->workerSessions->attach($workerSession, [$readSub, $errSub, $frames]);
         }
     }
     
-    private function cancelTimeout(Call $call) {
+    private function cancelTimeout(Dispatchable $call) {
         if ($this->timeoutSubscriptions->contains($call)) {
             $subscription = $this->timeoutSubscriptions->offsetGet($call);
             $subscription->cancel();
@@ -271,15 +257,21 @@ class ProcessPool {
     private function handleUserlandError(WorkerSession $workerSession, \Exception $e) {
         list($call, $callId) = $this->workerSessionCallMap->offsetGet($workerSession);
         $this->cancelTimeout($call);
-        $call->onError($callId, $e);
-        $this->checkin($workerSession);
+        
+        try {
+            $call->onError($e, $callId);
+            $this->checkin($workerSession);
+        } catch (\Exception $e) {
+            $this->checkin($workerSession);
+            throw $e;
+        }
     }
     
     private function handleInternalError(WorkerSession $workerSession, \Exception $e) {
         if (!$this->availableWorkerSessions->contains($workerSession)) {
             list($call, $callId) = $this->workerSessionCallMap->offsetGet($workerSession);
             $this->cancelTimeout($call);
-            $call->onError($callId, $e);
+            $call->onError($e, $callId);
         }
         
         $this->unloadWorkerSession($workerSession);

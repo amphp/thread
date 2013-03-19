@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Messaging;
+namespace Amp\Async\Processes\Io;
 
 class FrameWriter {
     
@@ -10,7 +10,7 @@ class FrameWriter {
     const PAYLOAD_STREAMING = 3;
     
     private $state = self::START;
-    private $destination;
+    private $ouputStream;
     private $currentFrame;
     private $buffer;
     private $bufferSize;
@@ -19,8 +19,8 @@ class FrameWriter {
     private $streamingPayloadResource;
     private $isStreamPayloadReadingComplete;
     
-    function __construct($destination) {
-        $this->destination = $destination;
+    function __construct($ouputStream) {
+        $this->ouputStream = $ouputStream;
     }
     
     function setGranularity($bytes) {
@@ -129,7 +129,7 @@ class FrameWriter {
     }
     
     private function doWrite() {
-        $bytesWritten = @fwrite($this->destination, $this->buffer, $this->granularity);
+        $bytesWritten = @fwrite($this->ouputStream, $this->buffer, $this->granularity);
         
         if ($bytesWritten === $this->bufferSize) {
             return TRUE;
@@ -137,11 +137,11 @@ class FrameWriter {
             $this->buffer = substr($this->buffer, $bytesWritten);
             $this->bufferSize -= $bytesWritten;
             return FALSE;
-        } elseif (is_resource($this->destination)) {
+        } elseif (is_resource($this->ouputStream)) {
             return FALSE;
         } else {
             throw new ResourceException(
-                'Failed writing to destination stream'
+                'Failed writing to ouputStream stream'
             );
         }
     }

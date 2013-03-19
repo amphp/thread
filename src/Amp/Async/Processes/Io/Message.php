@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Messaging;
+namespace Amp\Async\Processes\Io;
 
 class Message {
     
@@ -45,7 +45,7 @@ class Message {
     }
     
     /**
-     * @TODO Add error handling for stream error
+     * @TODO Add error handling for stream errors
      */
     function getPayload() {
         if (isset($this->payloadBuffer)) {
@@ -58,12 +58,12 @@ class Message {
     }
     
     /**
-     * @TODO Add error handling for stream error
+     * @TODO Add error handling for stream errors
      */
     private function flattenMultiFramePayload() {
         foreach ($this->frames as $frame) {
             $payload = $frame->getPayload();
-            if (is_string($payload)) {
+            if (is_scalar($payload)) {
                 $this->payloadBuffer .= $payload;
             } else {
                 $this->payloadBuffer .= stream_get_contents($payload);

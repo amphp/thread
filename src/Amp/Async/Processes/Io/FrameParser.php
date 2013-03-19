@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Messaging;
+namespace Amp\Async\Processes\Io;
 
 class FrameParser {
     
@@ -10,8 +10,8 @@ class FrameParser {
     const PAYLOAD_READ = 25;
     const PAYLOAD_SWAP_WRITE = 30;
     
-    private $inputStream;
     private $state = self::START;
+    private $inputStream;
     private $readBuffer = '';
     
     private $fin;
@@ -25,7 +25,6 @@ class FrameParser {
     private $writeBuffer;
     private $granularity = 8192;
     private $swapSize = 10485760;
-    private $swapDir;
     
     function __construct($inputStream) {
         $this->inputStream = $inputStream;
@@ -39,12 +38,9 @@ class FrameParser {
         $this->swapSize = (int) $bytes;
     }
     
-    function setSwapDir($dir) {
-        $this->swapDir = $dir;
-    }
-    
     function parse() {
-        $data = fread($this->inputStream, $this->granularity);
+        $data = @fread($this->inputStream, $this->granularity);
+        
         $emptyData = !($data || $data === '0');
         $emptyBuffer = !isset($this->readBuffer[0]);
         
@@ -196,24 +192,21 @@ class FrameParser {
     private function addPayloadChunk($data) {
         $swapNeeded = ($this->bytesRcvd >= $this->swapSize);
         
-        if ($swapNeeded && !$this->payloadSwapStream) {
-            $swapDir = $this->swapDir ?: sys_get_temp_dir();
-            $uri = tempnam($swapDir, 'amp');
-            
-            if (FALSE === ($this->payloadSwapStream = @fopen($uri, 'wb+'))) {
+        if (!$swapNeeded) {
+            $this->payload .= $data;
+            return TRUE;
+        } elseif (!$this->payloadSwapStream) {
+            if (FALSE === ($this->payloadSwapStream = @fopen('php://temp', 'wb+'))) {
                 throw new \RuntimeException(
                     'Failed opening temporary frame storage resource'
                 );
             }
             
             stream_set_blocking($this->payloadSwapStream, FALSE);
-        }
-        
-        if ($swapNeeded) {
+            
             return $this->writePayloadToSwapStream($data);
         } else {
-            $this->payload .= $data;
-            return TRUE;
+            return $this->writePayloadToSwapStream($data);
         }
     }
     

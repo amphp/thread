@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Messaging;
+namespace Amp\Async\Processes\Io;
 
 /*
     AMP FRAMING SPEC
@@ -81,7 +81,7 @@ class Frame {
         $this->fin = $fin;
         $this->rsv = $rsv;
         $this->opcode = $opcode;
-        $this->payload = $payload;
+        $this->payload = ($payload === NULL) ? '' : $payload;
         $this->length = $length;
     }
     

@@ -1,6 +1,10 @@
 <?php
 
-namespace Amp\Messaging;
+namespace Amp\Async\Processes;
+
+use Amp\Async\Processes\Io\Frame,
+    Amp\Async\Processes\Io\FrameParser,
+    Amp\Async\Processes\Io\FrameWriter;
 
 class WorkerSession {
     
