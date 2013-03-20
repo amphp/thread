@@ -172,7 +172,10 @@ class ProcessDispatcher {
         
         $this->workerSessionCallMap->attach($workerSession, [$call, $callId]);
         $this->callWorkerSessionMap->attach($call, $workerSession);
-        $this->inProgressResponses->attach($workerSession, '');
+        
+        if (!$call instanceof IncrementalDispatchable) {
+            $this->inProgressResponses->attach($workerSession, '');
+        }
         
         $payload = [$call->getProcedure(), $call->getWorkload()];
         $payload = serialize($payload);
@@ -342,10 +345,12 @@ class ProcessDispatcher {
     }
     
     function stop() {
-        $this->autoWriteSubscription->disable();
-        
-        foreach ($this->workerSessions as $workerSession) {
-            $this->unloadWorkerSession($workerSession);
+        if ($this->isStarted) {
+            $this->autoWriteSubscription->disable();
+            
+            foreach ($this->workerSessions as $workerSession) {
+                $this->unloadWorkerSession($workerSession);
+            }
         }
         
         $this->isStarted = FALSE;
