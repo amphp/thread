@@ -13,8 +13,8 @@ interface Reactor {
     function stop();
     function once($delay, callable $callback);
     function repeat($interval, callable $callback);
-    function onReadable($ioStream, callable $callback, $timeout);
-    function onWritable($ioStream, callable $callback, $timeout);
+    function onReadable($ioStream, callable $callback, $timeout = -1);
+    function onWritable($ioStream, callable $callback, $timeout = -1);
     function cancel(Subscription $subscription);
     
 }
