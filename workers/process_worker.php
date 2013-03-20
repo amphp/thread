@@ -5,7 +5,7 @@ use Amp\ReactorFactory,
     Amp\Async\Processes\Io\FrameParser,
     Amp\Async\Processes\Io\FrameWriter;
 
-date_default_timezone_set(date_default_timezone_get());
+@date_default_timezone_set(date_default_timezone_get());
 
 require dirname(__DIR__) . '/autoload.php';
 
