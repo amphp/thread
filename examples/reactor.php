@@ -2,7 +2,7 @@
 
 require dirname(__DIR__) . '/autoload.php';
 
-@date_default_timezone_set(date_default_timezone_get());
+date_default_timezone_set(ini_get('date.timezone') ?: 'UTC');
 
 stream_set_blocking(STDIN, FALSE);
 
