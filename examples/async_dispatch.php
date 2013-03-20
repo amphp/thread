@@ -3,7 +3,7 @@
 use Amp\Async\Processes\ProcessDispatcher,
     Amp\ReactorFactory;
 
-date_default_timezone_set('GMT');
+date_default_timezone_set(date_default_timezone_get());
 
 require dirname(__DIR__) . '/autoload.php';
 require __DIR__ . '/support_files/MyAsyncFunctionCall.php';

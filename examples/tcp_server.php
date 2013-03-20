@@ -3,7 +3,7 @@
 use Amp\ReactorFactory,
     Amp\Server\TcpServer;
 
-date_default_timezone_set('GMT');
+date_default_timezone_set(date_default_timezone_get());
 
 require dirname(__DIR__) . '/autoload.php';
 
@@ -22,7 +22,7 @@ $timeServer = new TcpServer($reactor, '127.0.0.1', 1337);
  * when a new client connects.
  */
 $timeServer->listen(function($clientSock, $peerName, $serverName) {
-    $msg = 'The GMT time is ' . date('Y-m-d H:i:s') . "\n";
+    $msg = 'The time is ' . date('Y-m-d H:i:s') . "\n";
     
     // Client sockets accepted by the server are non-blocking by default. We turn blocking on
     // for this example to make our fwrite() operation atomic.
@@ -39,7 +39,7 @@ $reactor->once($delay = 0, function() use ($timeServer) {
     $port = $timeServer->getPort();
     
     echo "Time server started on {$addr}:{$port}", "\n";
-    echo "To retrieve the current GMT time, telnet in like so:", "\n\n";
+    echo "To retrieve the current time, telnet in like so:", "\n\n";
     echo "\t$ telnet {$addr} {$port}", "\n\n";
 });
 
