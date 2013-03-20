@@ -10,15 +10,15 @@ class Worker {
     
     private $process;
     private $pipes = [];
-    private static $descriptors = [
+    private $descriptors = [
         self::WRITE_PIPE => ["pipe", "r"],
         self::READ_PIPE  => ["pipe", "w"],
-        self::ERROR_PIPE => ["pipe", "w"]
+        self::ERROR_PIPE => NULL
     ];
     
-    function __construct($command, $cwd = NULL) {
-        $cwd = $cwd ?: getcwd();
-        $this->process = proc_open($command, self::$descriptors, $this->pipes, $cwd);
+    function __construct($command, $errorStream = NULL, $cwd = NULL) {
+        $this->descriptors[self::ERROR_PIPE] = $errorStream ?: STDERR;
+        $this->process = proc_open($command, $this->descriptors, $this->pipes, $cwd ?: getcwd());
         
         if (!is_resource($this->process)) {
             throw new \RuntimeException(
@@ -28,7 +28,6 @@ class Worker {
         
         stream_set_blocking($this->pipes[self::WRITE_PIPE], FALSE);
         stream_set_blocking($this->pipes[self::READ_PIPE],  FALSE);
-        stream_set_blocking($this->pipes[self::ERROR_PIPE], FALSE);
     }
     
     function getWritePipe() {
@@ -39,10 +38,6 @@ class Worker {
         return $this->pipes[self::READ_PIPE];
     }
     
-    function getErrorPipe() {
-        return $this->pipes[self::ERROR_PIPE];
-    }
-    
     function getPipes() {
         return $this->pipes;
     }
@@ -50,7 +45,7 @@ class Worker {
     function __destruct() {
         foreach ($this->pipes as $pipe) {
             if (is_resource($pipe)) {
-                fclose($pipe);
+                @fclose($pipe);
             }
         }
         

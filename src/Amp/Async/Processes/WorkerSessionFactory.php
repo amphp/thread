@@ -7,8 +7,8 @@ use Amp\Async\Processes\Io\FrameParser,
 
 class WorkerSessionFactory {
     
-    function __invoke($cmd, $cwd = NULL) {
-        $worker = new Worker($cmd, $cwd);
+    function __invoke($cmd, $errorStream = NULL, $cwd = NULL) {
+        $worker = new Worker($cmd, $errorStream, $cwd);
         
         list($writePipe, $readPipe) = $worker->getPipes();
         

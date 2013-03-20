@@ -16,11 +16,11 @@ class ProcessDispatcher {
     private $workerSessionFactory;
     
     private $workerSessions;
-    private $availableWorkers;
     private $writableWorkers;
     private $workerCallMap;
     private $callWorkerMap;
     private $inProgressResponses;
+    private $availableWorkers = [];
     private $timeoutSchedule = [];
     
     private $autoWriteSubscription;
@@ -42,7 +42,6 @@ class ProcessDispatcher {
         $this->workerSessionFactory = $wsf ?: new WorkerSessionFactory;
         
         $this->workerSessions       = new \SplObjectStorage;
-        $this->availableWorkers     = new \SplObjectStorage;
         $this->writableWorkers      = new \SplObjectStorage;
         $this->workerCallMap        = new \SplObjectStorage;
         $this->callWorkerMap        = new \SplObjectStorage;
@@ -97,12 +96,10 @@ class ProcessDispatcher {
     }
     
     private function spawnWorkerSession() {
-        $workerSession = $this->workerSessionFactory->__invoke($this->workerCmd, $this->workerCwd);
-        
-        $errSubscription = $this->reactor->onReadable(
-            $workerSession->getErrorPipe(),
-            function($pipe, $trigger) use ($workerSession) { $this->errorRead($workerSession, $pipe, $trigger); },
-            $this->readTimeout
+        $workerSession = $this->workerSessionFactory->__invoke(
+            $this->workerCmd,
+            $this->writeErrorsTo,
+            $this->workerCwd
         );
         
         $readSubscription = $this->reactor->onReadable(
@@ -111,8 +108,8 @@ class ProcessDispatcher {
             $this->readTimeout
         );
         
-        $this->workerSessions->attach($workerSession, [$readSubscription, $errSubscription]);
-        $this->availableWorkers->attach($workerSession);
+        $this->workerSessions->attach($workerSession, $readSubscription);
+        $this->availableWorkers[] = $workerSession;
     }
     
     function call(callable $onResult, $procedure, $varArgs = NULL) {
@@ -177,16 +174,14 @@ class ProcessDispatcher {
     }
     
     private function checkout() {
-        if (!count($this->availableWorkers)) {
+        if (!$this->availableWorkers) {
             return;
         }
         
-        $this->availableWorkers->rewind();
-        $workerSession = $this->availableWorkers->current();
-        $this->availableWorkers->detach($workerSession);
-        
+        $workerSession = array_shift($this->availableWorkers);
         $callId = key($this->callQueue);
-        $call = array_shift($this->callQueue);
+        $call = $this->callQueue[$callId];
+        unset($this->callQueue[$callId]);
         
         $this->workerCallMap->attach($workerSession, [$call, $callId]);
         $this->callWorkerMap->attach($call, $workerSession);
@@ -201,16 +196,6 @@ class ProcessDispatcher {
         $frame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload, $length);
         
         $this->write($workerSession, $frame);
-    }
-    
-    private function errorRead(WorkerSession $workerSession, $errPipe, $triggeredBy) {
-        if ($triggeredBy != Reactor::TIMEOUT
-            && FALSE === @stream_copy_to_stream($errPipe, $this->writeErrorsTo)
-        ) {
-            $this->handleInternalError($workerSession, new ResourceException(
-                'Worker process STDERR pipe has gone away'
-            ));
-        }
     }
     
     private function read(WorkerSession $workerSession, $triggeredBy) {
@@ -295,7 +280,7 @@ class ProcessDispatcher {
     }
     
     private function handleInternalError(WorkerSession $workerSession, \Exception $e) {
-        if (!$this->availableWorkers->contains($workerSession)) {
+        if ($this->workerCallMap->contains($workerSession)) {
             list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
             unset($this->timeoutSchedule[$callId]);
             $call->onError($e, $callId);
@@ -316,15 +301,12 @@ class ProcessDispatcher {
     }
     
     private function checkin(WorkerSession $workerSession) {
-        list($readSub, $errSub) = $this->workerSessions->offsetGet($workerSession);
-        $this->workerSessions->attach($workerSession, [$readSub, $errSub, $frames = []]);
-        
         $call = $this->workerCallMap->offsetGet($workerSession)[0];
         $this->callWorkerMap->detach($call);
         $this->workerCallMap->detach($workerSession);
         $this->inProgressResponses->detach($workerSession);
         
-        $this->availableWorkers->attach($workerSession);
+        $this->availableWorkers[] = $workerSession;
         
         if ($this->callQueue) {
             $this->checkout();
@@ -332,21 +314,24 @@ class ProcessDispatcher {
     }
     
     private function unloadWorkerSession($workerSession) {
-        list($readSubscription, $errorSubscription) = $this->workerSessions->offsetGet($workerSession);
-        
-        $readSubscription->cancel();
-        $errorSubscription->cancel();
+        $this->workerSessions->offsetGet($workerSession)->cancel();
         
         if ($this->workerCallMap->contains($workerSession)) {
-            $call = $this->workerCallMap->offsetGet($workerSession)[0];
+            list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
+            
             $this->callWorkerMap->detach($call);
             $this->workerCallMap->detach($workerSession);
             $this->inProgressResponses->detach($workerSession);
+            $this->writableWorkers->detach($workerSession);
+            
+            unset($this->timeoutSchedule[$callId]);
+            
+        } else {
+            $availabilityKey = array_search($workerSession, $this->availableWorkers);
+            unset($this->availableWorkers[$availabilityKey]);
         }
         
         $this->workerSessions->detach($workerSession);
-        $this->availableWorkers->detach($workerSession);
-        $this->writableWorkers->detach($workerSession);
     }
     
     function __destruct() {

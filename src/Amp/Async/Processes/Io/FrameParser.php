@@ -50,7 +50,6 @@ class FrameParser {
                 'Failed reading from input stream'
             );
         } else {
-            usleep(2500);
             goto more_data_needed;
         }
         

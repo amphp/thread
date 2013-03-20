@@ -34,10 +34,6 @@ class WorkerSession {
         return $this->worker->getReadPipe();
     }
     
-    function getErrorPipe() {
-        return $this->worker->getErrorPipe();
-    }
-    
     function getPipes() {
         return $this->worker->getPipes();
     }
