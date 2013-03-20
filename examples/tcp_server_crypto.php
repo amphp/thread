@@ -3,7 +3,7 @@
 use Amp\ReactorFactory,
     Amp\Server\TcpServerCrypto;
 
-date_default_timezone_set('GMT');
+date_default_timezone_set(date_default_timezone_get());
 
 require dirname(__DIR__) . '/autoload.php';
 

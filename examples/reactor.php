@@ -2,7 +2,7 @@
 
 require dirname(__DIR__) . '/autoload.php';
 
-date_default_timezone_set('GMT');
+date_default_timezone_set(date_default_timezone_get());
 stream_set_blocking(STDIN, FALSE);
 
 $reactor = (new Amp\ReactorFactory)->select();
