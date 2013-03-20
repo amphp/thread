@@ -50,11 +50,11 @@ class Worker {
     function __destruct() {
         foreach ($this->pipes as $pipe) {
             if (is_resource($pipe)) {
-                @fclose($pipe);
+                fclose($pipe);
             }
         }
         
-        proc_close($this->process);
+        proc_terminate($this->process);
     }
     
 }

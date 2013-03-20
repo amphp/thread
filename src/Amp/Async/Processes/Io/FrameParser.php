@@ -45,11 +45,12 @@ class FrameParser {
                 case self::PAYLOAD:
                     goto payload;
             }
-        } elseif (!is_resource($this->inputStream) || feof($this->inputStream)) {
+        } elseif (!is_resource($this->inputStream)) {
             throw new ResourceException(
                 'Failed reading from input stream'
             );
         } else {
+            usleep(2500);
             goto more_data_needed;
         }
         

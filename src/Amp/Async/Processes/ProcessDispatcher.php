@@ -16,41 +16,37 @@ class ProcessDispatcher {
     private $workerSessionFactory;
     
     private $workerSessions;
-    private $availableWorkerSessions;
-    private $writableWorkerSessions;
-    private $workerSessionCallMap;
-    private $callWorkerSessionMap;
-    private $timeoutSubscriptions;
+    private $availableWorkers;
+    private $writableWorkers;
+    private $workerCallMap;
+    private $callWorkerMap;
     private $inProgressResponses;
+    private $timeoutSchedule = [];
     
     private $autoWriteSubscription;
+    private $autoTimeoutSubscription;
     
     private $workerCmd;
     private $workerCwd;
     private $maxWorkers = 5;
     
-    private $responseTimeout = 30;
     private $readTimeout = 60;
     private $autoWriteInterval = 0.025;
+    private $autoTimeoutInterval = 30;
     private $writeErrorsTo = STDERR;
     private $isStarted = FALSE;
     
-    function __construct(
-        Reactor $reactor,
-        $workerCmd,
-        WorkerSessionFactory $wsf = NULL
-    ) {
+    function __construct(Reactor $reactor, $workerCmd, WorkerSessionFactory $wsf = NULL) {
         $this->reactor = $reactor;
         $this->workerCmd = $workerCmd;
         $this->workerSessionFactory = $wsf ?: new WorkerSessionFactory;
         
-        $this->workerSessions           = new \SplObjectStorage;
-        $this->availableWorkerSessions  = new \SplObjectStorage;
-        $this->writableWorkerSessions   = new \SplObjectStorage;
-        $this->workerSessionCallMap     = new \SplObjectStorage;
-        $this->callWorkerSessionMap     = new \SplObjectStorage;
-        $this->inProgressResponses      = new \SplObjectStorage;
-        $this->timeoutSubscriptions     = new \SplObjectStorage;
+        $this->workerSessions       = new \SplObjectStorage;
+        $this->availableWorkers     = new \SplObjectStorage;
+        $this->writableWorkers      = new \SplObjectStorage;
+        $this->workerCallMap        = new \SplObjectStorage;
+        $this->callWorkerMap        = new \SplObjectStorage;
+        $this->inProgressResponses  = new \SplObjectStorage;
     }
     
     function setMaxWorkers($maxWorkers) {
@@ -61,8 +57,8 @@ class ProcessDispatcher {
         $this->workerCwd = $workerCwd;
     }
     
-    function setResponseTimeout($seconds) {
-        $this->responseTimeout = filter_var($seconds, FILTER_VALIDATE_INT, ['options' => [
+    function setAutoTimeoutInterval($seconds) {
+        $this->autoTimeoutInterval = filter_var($seconds, FILTER_VALIDATE_INT, ['options' => [
             'min_range' => 0,
             'default' => 30
         ]]);
@@ -81,8 +77,18 @@ class ProcessDispatcher {
             $this->autoWriteSubscription->enable();
         } else {
             $this->autoWriteSubscription = $this->reactor->repeat($this->autoWriteInterval, function() {
-                foreach ($this->writableWorkerSessions as $workerSession) {
+                foreach ($this->writableWorkers as $workerSession) {
                     $this->write($workerSession);
+                }
+            });
+        }
+        
+        if ($this->autoTimeoutSubscription) {
+            $this->autoTimeoutSubscription->enable();
+        } else {
+            $this->autoTimeoutSubscription = $this->reactor->repeat($this->autoTimeoutInterval, function() {
+                if ($this->timeoutSchedule) {
+                    $this->autoTimeout();
                 }
             });
         }
@@ -105,8 +111,8 @@ class ProcessDispatcher {
             $this->readTimeout
         );
         
-        $this->workerSessions->attach($workerSession, [$readSubscription, $errSubscription, $frames = []]);
-        $this->availableWorkerSessions->attach($workerSession);
+        $this->workerSessions->attach($workerSession, [$readSubscription, $errSubscription]);
+        $this->availableWorkers->attach($workerSession);
     }
     
     function call(callable $onResult, $procedure, $varArgs = NULL) {
@@ -131,11 +137,8 @@ class ProcessDispatcher {
         $callId = uniqid();
         $this->callQueue[$callId] = $call;
         
-        if ($this->responseTimeout) {
-            $subscription = $this->reactor->once($this->responseTimeout, function() use ($call, $callId) {
-                $this->expireTimeout($call, $callId);
-            });
-            $this->timeoutSubscriptions->attach($call, $subscription);
+        if ($this->autoTimeoutInterval) {
+            $this->timeoutSchedule[$callId] = [$call, time() + $this->autoTimeoutInterval];
         }
         
         $this->checkout();
@@ -143,35 +146,50 @@ class ProcessDispatcher {
         return $callId;
     }
     
-    private function expireTimeout(Dispatchable $call, $callId) {
-        if (isset($this->callQueue[$callId])) {
-            unset($this->callQueue[$callId]);
-        } else {
-            $workerSession = $this->callWorkerSessionMap->offsetGet($call);
-            $this->unloadWorkerSession($workerSession);
+    private function autoTimeout() {
+        $now = time();
+        $timeoutsToClear = [];
+        
+        foreach ($this->timeoutSchedule as $callId => $callTimeoutArr) {
+            list($call, $cutoffTime) = $callTimeoutArr;
+            
+            if ($now < $cutoffTime) {
+                break;
+            }
+            
+            $timeoutsToClear[] = $callId;
+            
+            if (isset($this->callQueue[$callId])) {
+                unset($this->callQueue[$callId]);
+            } else {
+                $workerSession = $this->callWorkerMap->offsetGet($call);
+                $this->unloadWorkerSession($workerSession);
+            }
+            
+            $call->onError(new TimeoutException, $callId);
         }
         
-        $subscription = $this->timeoutSubscriptions->offsetGet($call);
-        $subscription->cancel();
-        $this->timeoutSubscriptions->detach($call);
-        
-        $call->onError(new TimeoutException, $callId);
+        if ($timeoutsToClear) {
+            foreach ($timeoutsToClear as $callId) {
+                unset($this->timeoutSchedule[$callId]);
+            }
+        }
     }
     
     private function checkout() {
-        if (!count($this->availableWorkerSessions)) {
+        if (!count($this->availableWorkers)) {
             return;
         }
         
-        $this->availableWorkerSessions->rewind();
-        $workerSession = $this->availableWorkerSessions->current();
-        $this->availableWorkerSessions->detach($workerSession);
+        $this->availableWorkers->rewind();
+        $workerSession = $this->availableWorkers->current();
+        $this->availableWorkers->detach($workerSession);
         
         $callId = key($this->callQueue);
         $call = array_shift($this->callQueue);
         
-        $this->workerSessionCallMap->attach($workerSession, [$call, $callId]);
-        $this->callWorkerSessionMap->attach($call, $workerSession);
+        $this->workerCallMap->attach($workerSession, [$call, $callId]);
+        $this->callWorkerMap->attach($call, $workerSession);
         
         if (!$call instanceof IncrementalDispatchable) {
             $this->inProgressResponses->attach($workerSession, '');
@@ -233,13 +251,13 @@ class ProcessDispatcher {
     }
     
     private function receiveDataFrame(WorkerSession $workerSession, Frame $frame) {
-        list($call, $callId) = $this->workerSessionCallMap->offsetGet($workerSession);
+        list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
         
         $isFin = $frame->isFin();
         $isIncremental = ($call instanceof IncrementalDispatchable);
         
         if ($isIncremental && $isFin) {
-            $this->cancelTimeout($call);
+            unset($this->timeoutSchedule[$callId]);
             $payload = $frame->getPayload();
             $call->onSuccess($payload, $callId);
         } elseif ($isIncremental) {
@@ -248,7 +266,7 @@ class ProcessDispatcher {
         } elseif ($isFin) {
             $result = $this->inProgressResponses->offsetGet($workerSession) . $frame->getPayload();
             $result = unserialize($result);
-            $this->cancelTimeout($call);
+            unset($this->timeoutSchedule[$callId]);
             
             try {
                 $call->onSuccess($result, $callId);
@@ -263,17 +281,9 @@ class ProcessDispatcher {
         }
     }
     
-    private function cancelTimeout(Dispatchable $call) {
-        if ($this->timeoutSubscriptions->contains($call)) {
-            $subscription = $this->timeoutSubscriptions->offsetGet($call);
-            $subscription->cancel();
-            $this->timeoutSubscriptions->detach($call);
-        }
-    }
-    
     private function handleUserlandError(WorkerSession $workerSession, \Exception $e) {
-        list($call, $callId) = $this->workerSessionCallMap->offsetGet($workerSession);
-        $this->cancelTimeout($call);
+        list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
+        unset($this->timeoutSchedule[$callId]);
         
         try {
             $call->onError($e, $callId);
@@ -285,9 +295,9 @@ class ProcessDispatcher {
     }
     
     private function handleInternalError(WorkerSession $workerSession, \Exception $e) {
-        if (!$this->availableWorkerSessions->contains($workerSession)) {
-            list($call, $callId) = $this->workerSessionCallMap->offsetGet($workerSession);
-            $this->cancelTimeout($call);
+        if (!$this->availableWorkers->contains($workerSession)) {
+            list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
+            unset($this->timeoutSchedule[$callId]);
             $call->onError($e, $callId);
         }
         
@@ -298,7 +308,7 @@ class ProcessDispatcher {
     private function write(WorkerSession $workerSession, Frame $frame = NULL) {
         try {
             if ($completedFrame = $workerSession->write($frame)) {
-                $this->writableWorkerSessions->detach($workerSession);
+                $this->writableWorkers->detach($workerSession);
             }
         } catch (ResourceException $e) {
             return $this->handleInternalError($workerSession, $e);
@@ -309,12 +319,12 @@ class ProcessDispatcher {
         list($readSub, $errSub) = $this->workerSessions->offsetGet($workerSession);
         $this->workerSessions->attach($workerSession, [$readSub, $errSub, $frames = []]);
         
-        $call = $this->workerSessionCallMap->offsetGet($workerSession)[0];
-        $this->callWorkerSessionMap->detach($call);
-        $this->workerSessionCallMap->detach($workerSession);
+        $call = $this->workerCallMap->offsetGet($workerSession)[0];
+        $this->callWorkerMap->detach($call);
+        $this->workerCallMap->detach($workerSession);
         $this->inProgressResponses->detach($workerSession);
         
-        $this->availableWorkerSessions->attach($workerSession);
+        $this->availableWorkers->attach($workerSession);
         
         if ($this->callQueue) {
             $this->checkout();
@@ -327,16 +337,16 @@ class ProcessDispatcher {
         $readSubscription->cancel();
         $errorSubscription->cancel();
         
-        if ($this->workerSessionCallMap->contains($workerSession)) {
-            $call = $this->workerSessionCallMap->offsetGet($workerSession)[0];
-            $this->callWorkerSessionMap->detach($call);
-            $this->workerSessionCallMap->detach($workerSession);
+        if ($this->workerCallMap->contains($workerSession)) {
+            $call = $this->workerCallMap->offsetGet($workerSession)[0];
+            $this->callWorkerMap->detach($call);
+            $this->workerCallMap->detach($workerSession);
             $this->inProgressResponses->detach($workerSession);
         }
         
         $this->workerSessions->detach($workerSession);
-        $this->writableWorkerSessions->detach($workerSession);
-        $this->availableWorkerSessions->detach($workerSession);
+        $this->availableWorkers->detach($workerSession);
+        $this->writableWorkers->detach($workerSession);
     }
     
     function __destruct() {
