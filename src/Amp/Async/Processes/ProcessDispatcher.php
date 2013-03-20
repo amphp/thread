@@ -242,16 +242,15 @@ class ProcessDispatcher {
         $isIncremental = ($call instanceof IncrementalDispatchable);
         
         if ($isIncremental && $isFin) {
-            unset($this->timeoutSchedule[$callId]);
             $payload = $frame->getPayload();
             $call->onSuccess($payload, $callId);
+            $this->checkin($workerSession);
         } elseif ($isIncremental) {
             $payload = $frame->getPayload();
             $call->onIncrement($payload, $callId);
         } elseif ($isFin) {
             $result = $this->inProgressResponses->offsetGet($workerSession) . $frame->getPayload();
             $result = unserialize($result);
-            unset($this->timeoutSchedule[$callId]);
             
             try {
                 $call->onSuccess($result, $callId);
@@ -267,9 +266,6 @@ class ProcessDispatcher {
     }
     
     private function handleUserlandError(WorkerSession $workerSession, \Exception $e) {
-        list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
-        unset($this->timeoutSchedule[$callId]);
-        
         try {
             $call->onError($e, $callId);
             $this->checkin($workerSession);
@@ -301,7 +297,9 @@ class ProcessDispatcher {
     }
     
     private function checkin(WorkerSession $workerSession) {
-        $call = $this->workerCallMap->offsetGet($workerSession)[0];
+        list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
+        unset($this->timeoutSchedule[$callId]);
+            
         $this->callWorkerMap->detach($call);
         $this->workerCallMap->detach($workerSession);
         $this->inProgressResponses->detach($workerSession);
