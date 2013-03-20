@@ -5,14 +5,14 @@ namespace Amp\Async\Processes\Io;
 class FrameParser {
     
     const START = 0;
-    const DETERMINE_LENGTH_254 = 5;
-    const DETERMINE_LENGTH_255 = 10;
-    const PAYLOAD_READ = 25;
-    const PAYLOAD_SWAP_WRITE = 30;
+    const DETERMINE_LENGTH_254 = 1;
+    const DETERMINE_LENGTH_255 = 2;
+    const PAYLOAD = 3;
     
     private $state = self::START;
     private $inputStream;
-    private $readBuffer = '';
+    private $buffer = '';
+    private $bytesRcvd = 0;
     
     private $fin;
     private $rsv;
@@ -20,11 +20,7 @@ class FrameParser {
     private $length;
     private $payload;
     
-    private $bytesRcvd = 0;
-    private $payloadSwapStream;
-    private $writeBuffer;
     private $granularity = 8192;
-    private $swapSize = 10485760;
     
     function __construct($inputStream) {
         $this->inputStream = $inputStream;
@@ -34,57 +30,40 @@ class FrameParser {
         $this->granularity = (int) $bytes;
     }
     
-    function setSwapSize($bytes) {
-        $this->swapSize = (int) $bytes;
-    }
-    
     function parse() {
         $data = @fread($this->inputStream, $this->granularity);
+        $this->buffer .= $data;
         
-        $emptyData = !($data || $data === '0');
-        $emptyBuffer = !isset($this->readBuffer[0]);
-        
-        if ($emptyData
-            && $emptyBuffer
-            && (!is_resource($this->inputStream) || feof($this->inputStream))
-        ) {
+        if ($data || $data === '0' || isset($this->buffer[0])) {
+            switch ($this->state) {
+                case self::START:
+                    goto start;
+                case self::DETERMINE_LENGTH_254:
+                    goto determine_length_254;
+                case self::DETERMINE_LENGTH_255:
+                    goto determine_length_255;
+                case self::PAYLOAD:
+                    goto payload;
+            }
+        } elseif (!is_resource($this->inputStream) || feof($this->inputStream)) {
             throw new ResourceException(
-                'Input stream has gone away'
+                'Failed reading from input stream'
             );
-        } elseif ($emptyData && $emptyBuffer) {
-            goto more_data_needed;
         } else {
-            $this->readBuffer .= $data;
-        }
-        
-        switch ($this->state) {
-            case self::START:
-                goto start;
-            case self::DETERMINE_LENGTH_254:
-                goto determine_length_254;
-            case self::DETERMINE_LENGTH_255:
-                goto determine_length_255;
-            case self::PAYLOAD_READ:
-                goto payload_read;
-            case self::PAYLOAD_SWAP_WRITE:
-                goto payload_swap_write;
-            default:
-                throw new \UnexpectedValueException(
-                    'Unexpected frame parsing state'
-                );
+            goto more_data_needed;
         }
         
         start: {
-            if (!isset($this->readBuffer[1])) {
+            if (!isset($this->buffer[1])) {
                 goto more_data_needed;
             }
             
-            $firstByte = ord($this->readBuffer[0]);
+            $firstByte = ord($this->buffer[0]);
             
             $this->fin = (bool) ($firstByte & 0b10000000);
             $this->rsv = ($firstByte & 0b01110000) >> 4;
             $this->opcode = $firstByte & 0b00001111;
-            $this->length = ord($this->readBuffer[1]);
+            $this->length = ord($this->buffer[1]);
             
             if ($this->length == 254) {
                 $this->state = self::DETERMINE_LENGTH_254;
@@ -93,78 +72,60 @@ class FrameParser {
                 $this->state = self::DETERMINE_LENGTH_255;
                 goto determine_length_255;
             } else {
-                $this->readBuffer = substr($this->readBuffer, 2);
-                $this->state = self::PAYLOAD_READ;
+                $this->buffer = substr($this->buffer, 2);
+                $this->state = self::PAYLOAD;
                 
-                goto payload_read;
+                goto payload;
             }
         }
         
         determine_length_254: {
-            if (isset($this->readBuffer[3])) {
-                $this->length = current(unpack('n', $this->readBuffer[2] . $this->readBuffer[3]));
-                $this->readBuffer = substr($this->readBuffer, 4);
-                $this->state = self::PAYLOAD_READ;
-                goto payload_read;
+            if (isset($this->buffer[3])) {
+                $this->length = current(unpack('n', $this->buffer[2] . $this->buffer[3]));
+                $this->buffer = substr($this->buffer, 4);
+                $this->state = self::PAYLOAD;
+                goto payload;
             } else {
                 goto more_data_needed;
             }
         }
         
         determine_length_255: {
-            if (isset($this->readBuffer[5])) {
-                $this->length = current(substr($this->readBuffer, 2, 4));
-                $this->readBuffer = substr($this->readBuffer, 6);
-                $this->state = self::PAYLOAD_READ;
-                goto payload_read;
+            if (isset($this->buffer[5])) {
+                $this->length = current(substr($this->buffer, 2, 4));
+                $this->buffer = substr($this->buffer, 6);
+                $this->state = self::PAYLOAD;
+                goto payload;
             } else {
                 goto more_data_needed;
             }
         }
         
-        payload_read: {
+        payload: {
             if (!$this->length) {
                 goto frame_complete;
             }
             
             $bytesRemaining = $this->length - $this->bytesRcvd;
             
-            if (isset($this->readBuffer[$bytesRemaining - 1])) {
-                $this->bytesRcvd += $bytesRemaining;
-                
-                if (isset($this->readBuffer[$bytesRemaining])) {
-                    $payloadChunk = substr($this->readBuffer, 0, $bytesRemaining);
-                    $this->readBuffer = substr($this->readBuffer, $bytesRemaining);
-                } else {
-                    $payloadChunk = $this->readBuffer;
-                    $this->readBuffer = '';
-                }
-                
-                if ($this->addPayloadChunk($payloadChunk)) {
-                    goto frame_complete;
-                } else {
-                    $this->state = self::PAYLOAD_SWAP_WRITE;
-                    goto further_write_needed;
-                }
-            } else {
-                $this->bytesRcvd += strlen($this->readBuffer);
-                $this->addPayloadChunk($this->readBuffer);
-                $this->readBuffer = '';
+            if (!isset($this->buffer[$bytesRemaining - 1])) {
+                $this->bytesRcvd += strlen($this->buffer);
+                $this->payload .= $this->buffer;
+                $this->buffer = '';
                 goto more_data_needed;
-            }
-        }
-        
-        payload_swap_write: {
-            if ($this->writePayloadToSwapStream()) {
+            } elseif (isset($this->buffer[$bytesRemaining])) {
+                $this->payload .= substr($this->buffer, 0, $bytesRemaining);
+                $this->buffer = substr($this->buffer, $bytesRemaining);
                 goto frame_complete;
             } else {
-                goto further_write_needed;
+                $this->payload .= $this->buffer;
+                $this->buffer = '';
+                goto frame_complete;
             }
         }
         
         frame_complete: {
-            $payload = $this->payloadSwapStream ?: $this->payload;
-            $frame = new Frame($this->fin, $this->rsv, $this->opcode, $payload, $this->length);
+            $frame = new Frame($this->fin, $this->rsv, $this->opcode, $this->payload);
             
             $this->state = self::START;
             
@@ -174,58 +135,12 @@ class FrameParser {
             $this->payload = NULL;
             $this->length = 0;
             $this->bytesRcvd = 0;
-            $this->writeBuffer = NULL;
-            $this->payloadSwapStream = NULL;
             
             return $frame;
         }
         
         more_data_needed: {
             return NULL;
-        }
-        
-        further_write_needed: {
-            return NULL;
-        }
-    }
-    
-    private function addPayloadChunk($data) {
-        $swapNeeded = ($this->bytesRcvd >= $this->swapSize);
-        
-        if (!$swapNeeded) {
-            $this->payload .= $data;
-            return TRUE;
-        } elseif (!$this->payloadSwapStream) {
-            if (FALSE === ($this->payloadSwapStream = @fopen('php://temp', 'wb+'))) {
-                throw new \RuntimeException(
-                    'Failed opening temporary frame storage resource'
-                );
-            }
-            
-            stream_set_blocking($this->payloadSwapStream, FALSE);
-            
-            return $this->writePayloadToSwapStream($data);
-        } else {
-            return $this->writePayloadToSwapStream($data);
-        }
-    }
-    
-    private function writePayloadToSwapStream($data = NULL) {
-        if (NULL !== $data) {
-            $this->writeBuffer .= $data;
-        }
-        
-        $bytesWritten = @fwrite($this->payloadSwapStream, $this->writeBuffer);
-        
-        if ($bytesWritten == strlen($this->writeBuffer)) {
-            return TRUE;
-        } elseif ($bytesWritten) {
-            $this->writeBuffer = substr($this->writeBuffer, $bytesWritten);
-            return FALSE;
-        } elseif (!is_resource($this->payloadSwapStream)) {
-            throw new \RuntimeException(
-                'Temporary frame storage resource has gone away'
-            );
         }
     }
     

@@ -8,8 +8,7 @@ use Amp\Reactor,
     Amp\Async\Dispatchable,
     Amp\Async\IncrementalDispatchable,
     Amp\Async\TimeoutException,
-    Amp\Async\Processes\Io\Frame,
-    Amp\Async\Processes\Io\Message;
+    Amp\Async\Processes\Io\Frame;
 
 class ProcessDispatcher {
     
@@ -22,6 +21,7 @@ class ProcessDispatcher {
     private $workerSessionCallMap;
     private $callWorkerSessionMap;
     private $timeoutSubscriptions;
+    private $inProgressResponses;
     
     private $autoWriteSubscription;
     
@@ -44,12 +44,13 @@ class ProcessDispatcher {
         $this->workerCmd = $workerCmd;
         $this->workerSessionFactory = $wsf ?: new WorkerSessionFactory;
         
-        $this->workerSessions          = new \SplObjectStorage;
-        $this->availableWorkerSessions = new \SplObjectStorage;
-        $this->writableWorkerSessions  = new \SplObjectStorage;
-        $this->workerSessionCallMap    = new \SplObjectStorage;
-        $this->callWorkerSessionMap    = new \SplObjectStorage;
-        $this->timeoutSubscriptions    = new \SplObjectStorage;
+        $this->workerSessions           = new \SplObjectStorage;
+        $this->availableWorkerSessions  = new \SplObjectStorage;
+        $this->writableWorkerSessions   = new \SplObjectStorage;
+        $this->workerSessionCallMap     = new \SplObjectStorage;
+        $this->callWorkerSessionMap     = new \SplObjectStorage;
+        $this->inProgressResponses      = new \SplObjectStorage;
+        $this->timeoutSubscriptions     = new \SplObjectStorage;
     }
     
     function setMaxWorkers($maxWorkers) {
@@ -171,6 +172,7 @@ class ProcessDispatcher {
         
         $this->workerSessionCallMap->attach($workerSession, [$call, $callId]);
         $this->callWorkerSessionMap->attach($call, $workerSession);
+        $this->inProgressResponses->attach($workerSession, '');
         
         $payload = [$call->getProcedure(), $call->getWorkload()];
         $payload = serialize($payload);
@@ -194,7 +196,7 @@ class ProcessDispatcher {
         if ($triggeredBy != Reactor::TIMEOUT) {
             try {
                 while ($frame = $workerSession->parse()) {
-                    $this->dispatchParsedFrame($workerSession, $frame);
+                    $this->receiveParsedFrame($workerSession, $frame);
                 }
             } catch (ResourceException $e) {
                 $this->handleInternalError($workerSession, $e);
@@ -204,7 +206,7 @@ class ProcessDispatcher {
         }
     }
     
-    private function dispatchParsedFrame(WorkerSession $workerSession, Frame $frame) {
+    private function receiveParsedFrame(WorkerSession $workerSession, Frame $frame) {
         $opcode = $frame->getOpcode();
         
         switch($opcode) {
@@ -228,7 +230,6 @@ class ProcessDispatcher {
     }
     
     private function receiveDataFrame(WorkerSession $workerSession, Frame $frame) {
-        list($readSub, $errSub, $frames) = $this->workerSessions->offsetGet($workerSession);
         list($call, $callId) = $this->workerSessionCallMap->offsetGet($workerSession);
         
         $isFin = $frame->isFin();
@@ -242,10 +243,9 @@ class ProcessDispatcher {
             $payload = $frame->getPayload();
             $call->onIncrement($payload, $callId);
         } elseif ($isFin) {
-            $frames[] = $frame;
+            $result = $this->inProgressResponses->offsetGet($workerSession) . $frame->getPayload();
+            $result = unserialize($result);
             $this->cancelTimeout($call);
-            $msg = new Message($frames);
-            $result = unserialize($msg->getPayload());
             
             try {
                 $call->onSuccess($result, $callId);
@@ -255,8 +255,8 @@ class ProcessDispatcher {
                 throw $e;
             }
         } else {
-            $frames[] = $frame;
-            $this->workerSessions->attach($workerSession, [$readSub, $errSub, $frames]);
+            $result = $this->inProgressResponses->offsetGet($workerSession) . $frame->getPayload();
+            $this->inProgressResponses->attach($workerSession, $result);
         }
     }
     
@@ -309,6 +309,7 @@ class ProcessDispatcher {
         $call = $this->workerSessionCallMap->offsetGet($workerSession)[0];
         $this->callWorkerSessionMap->detach($call);
         $this->workerSessionCallMap->detach($workerSession);
+        $this->inProgressResponses->detach($workerSession);
         
         $this->availableWorkerSessions->attach($workerSession);
         
@@ -327,6 +328,7 @@ class ProcessDispatcher {
             $call = $this->workerSessionCallMap->offsetGet($workerSession)[0];
             $this->callWorkerSessionMap->detach($call);
             $this->workerSessionCallMap->detach($workerSession);
+            $this->inProgressResponses->detach($workerSession);
         }
         
         $this->workerSessions->detach($workerSession);

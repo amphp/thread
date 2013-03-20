@@ -84,10 +84,14 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
         rewind($inputStream);
         
         $frameParser = new FrameParser($inputStream);
+        $frameParser->setGranularity(1);
         
         $actualResult = '';
         while (TRUE) {
-            $frame = $frameParser->parse();
+            if (!$frame = $frameParser->parse()) {
+                continue;
+            }
+            
             $actualResult .= $frame->getPayload();
             if ($frame->isFin()) {
                 break;
@@ -98,31 +102,4 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
     }
     
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

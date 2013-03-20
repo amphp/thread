@@ -2,10 +2,8 @@
 
 namespace Amp\Async\Processes;
 
-use Amp\Async\ProtocolException,
-    Amp\Async\ProcedureException,
+use Amp\Async\ProcedureException,
     Amp\Async\Processes\Io\Frame,
-    Amp\Async\Processes\Io\Message,
     Amp\Async\Processes\Io\FrameParser,
     Amp\Async\Processes\Io\FrameWriter;
 
@@ -13,7 +11,7 @@ class WorkerService {
     
     private $parser;
     private $writer;
-    private $frames = [];
+    private $buffer;
     
     function __construct(FrameParser $parser, FrameWriter $writer) {
         $this->parser = $parser;
@@ -21,16 +19,18 @@ class WorkerService {
     }
     
     function onReadable() {
-        if ($frame = $this->parser->parse()) {
-            $this->frames[] = $frame;
+        if (!$frame = $this->parser->parse()) {
+            return;
         }
         
-        if ($frame && $frame->isFin()) {
-            $msg = new Message($this->frames);
-            $this->frames = [];
+        $this->buffer .= $frame->getPayload();
+        
+        if ($frame->isFin()) {
+            $payload = $this->buffer;
+            $this->buffer = '';
             
             try {
-                $result = $this->onMessage($msg);
+                $result = $this->onMessage($payload);
                 $opcode = Frame::OP_DATA;
             } catch (\Exception $e) {
                 $result = $e;
@@ -38,7 +38,7 @@ class WorkerService {
             }
             
             $length = strlen($result);
-            $frame = new Frame($fin = 1, $rsv = 0, $opcode, $result, $length);
+            $frame = new Frame($fin = 1, $rsv = 0, $opcode, $result);
             
             try {
                 $this->writer->write($frame);
@@ -48,16 +48,14 @@ class WorkerService {
         }
     }
     
-    private function onMessage(Message $msg) {
-        $payload = $msg->getPayload();
-        
+    private function onMessage($payload) {
         list($procedure, $args) = unserialize($payload);
         
         try {
             $result = call_user_func_array($procedure, $args);
         } catch (\Exception $e) {
             throw new ProcedureException(
-                "Uncaught exception encountered invoking {$procedure}; task payload: {$payload}",
+                "Uncaught exception encountered while invoking {$procedure}",
                 NULL,
                 $e
             );
