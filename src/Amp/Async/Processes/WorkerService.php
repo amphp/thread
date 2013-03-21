@@ -2,10 +2,7 @@
 
 namespace Amp\Async\Processes;
 
-use Amp\Async\ProcedureException,
-    Amp\Async\Processes\Io\Frame,
-    Amp\Async\Processes\Io\FrameParser,
-    Amp\Async\Processes\Io\FrameWriter;
+use Amp\Async\ProcedureException;
 
 class WorkerService {
     
@@ -19,49 +16,46 @@ class WorkerService {
     }
     
     function onReadable() {
-        if (!$frame = $this->parser->parse()) {
+        if (!$frameArr = $this->parser->parse()) {
             return;
         }
         
-        $this->buffer .= $frame->getPayload();
+        list($isFin, $rsv, $opcode, $payload) = $frameArr;
         
-        if ($frame->isFin()) {
-            $payload = $this->buffer;
-            $this->buffer = '';
+        if ($opcode == Frame::OP_CLOSE) {
+            return $this->close();
+        }
+        
+        $this->buffer .= $payload;
+        
+        if ($isFin) {
+            
+            list($procedure, $args) = unserialize($this->buffer);
             
             try {
-                $result = $this->onMessage($payload);
+                $result = serialize(call_user_func_array($procedure, $args));
                 $opcode = Frame::OP_DATA;
             } catch (\Exception $e) {
-                $result = $e;
+                $result = new ProcedureException(
+                    "Uncaught exception encountered while invoking {$procedure}",
+                    NULL,
+                    $e
+                );
                 $opcode = Frame::OP_ERROR;
             }
             
-            $length = strlen($result);
+            $this->buffer = '';
+            
             $frame = new Frame($fin = 1, $rsv = 0, $opcode, $result);
             
-            try {
-                $this->writer->write($frame);
-            } catch (\Exception $e) {
-                die;
+            if (!$this->writer->write($frame)) {
+                while (!$this->writer->write());
             }
         }
     }
     
-    private function onMessage($payload) {
-        list($procedure, $args) = unserialize($payload);
-        
-        try {
-            $result = call_user_func_array($procedure, $args);
-        } catch (\Exception $e) {
-            throw new ProcedureException(
-                "Uncaught exception encountered while invoking {$procedure}",
-                NULL,
-                $e
-            );
-        }
-        
-        return serialize($result);
+    function close() {
+        die;
     }
     
 }

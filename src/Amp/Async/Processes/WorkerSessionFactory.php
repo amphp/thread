@@ -2,9 +2,6 @@
 
 namespace Amp\Async\Processes;
 
-use Amp\Async\Processes\Io\FrameParser,
-    Amp\Async\Processes\Io\FrameWriter;
-
 class WorkerSessionFactory {
     
     function __invoke($cmd, $errorStream = NULL, $cwd = NULL) {

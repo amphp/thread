@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Async\Processes\Io;
+namespace Amp\Async\Processes;
 
 class ResourceException extends \RuntimeException {}
 

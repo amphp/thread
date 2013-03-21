@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Async\Processes\Io;
+namespace Amp\Async\Processes;
 
 class FrameParser {
     
@@ -92,7 +92,7 @@ class FrameParser {
         
         determine_length_255: {
             if (isset($this->buffer[5])) {
-                $this->length = current(substr($this->buffer, 2, 4));
+                $this->length = current(unpack('N', substr($this->buffer, 2, 4)));
                 $this->buffer = substr($this->buffer, 6);
                 $this->state = self::PAYLOAD;
                 goto payload;
@@ -125,7 +125,7 @@ class FrameParser {
         }
         
         frame_complete: {
-            $frame = new Frame($this->fin, $this->rsv, $this->opcode, $this->payload);
+            $frameArr = [$this->fin, $this->rsv, $this->opcode, $this->payload, $this->length];
             
             $this->state = self::START;
             
@@ -136,7 +136,7 @@ class FrameParser {
             $this->length = 0;
             $this->bytesRcvd = 0;
             
-            return $frame;
+            return $frameArr;
         }
         
         more_data_needed: {

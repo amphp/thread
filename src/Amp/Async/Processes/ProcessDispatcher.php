@@ -7,8 +7,7 @@ use Amp\Reactor,
     Amp\Async\CallResult,
     Amp\Async\Dispatchable,
     Amp\Async\IncrementalDispatchable,
-    Amp\Async\TimeoutException,
-    Amp\Async\Processes\Io\Frame;
+    Amp\Async\TimeoutException;
 
 class ProcessDispatcher {
     
@@ -192,8 +191,7 @@ class ProcessDispatcher {
         
         $payload = [$call->getProcedure(), $call->getWorkload()];
         $payload = serialize($payload);
-        $length = strlen($payload);
-        $frame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload, $length);
+        $frame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
         
         $this->write($workerSession, $frame);
     }
@@ -201,8 +199,8 @@ class ProcessDispatcher {
     private function read(WorkerSession $workerSession, $triggeredBy) {
         if ($triggeredBy != Reactor::TIMEOUT) {
             try {
-                while ($frame = $workerSession->parse()) {
-                    $this->receiveParsedFrame($workerSession, $frame);
+                if ($frameArr = $workerSession->parse()) {
+                    $this->receiveParsedFrame($workerSession, $frameArr);
                 }
             } catch (ResourceException $e) {
                 $this->handleInternalError($workerSession, $e);
@@ -212,21 +210,19 @@ class ProcessDispatcher {
         }
     }
     
-    private function receiveParsedFrame(WorkerSession $workerSession, Frame $frame) {
-        $opcode = $frame->getOpcode();
+    private function receiveParsedFrame(WorkerSession $workerSession, array $frameArr) {
+        list($isFin, $rsv, $opcode, $payload) = $frameArr;
         
         switch($opcode) {
             case Frame::OP_DATA:
-                $this->receiveDataFrame($workerSession, $frame);
+                $this->receiveDataFrame($workerSession, $frameArr);
                 break;
             case Frame::OP_CLOSE:
                 $this->unloadWorkerSession($workerSession);
                 $this->spawnWorkerSession();
                 break;
             case Frame::OP_ERROR:
-                $this->handleUserlandError($workerSession, new WorkerException(
-                    $frame->getPayload()
-                ));
+                $this->handleUserlandError($workerSession, new WorkerException($payload));
                 break;
             default:
                 throw new \UnexpectedValueException(
@@ -235,21 +231,20 @@ class ProcessDispatcher {
         }
     }
     
-    private function receiveDataFrame(WorkerSession $workerSession, Frame $frame) {
+    private function receiveDataFrame(WorkerSession $workerSession, array $frameArr) {
         list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
         
-        $isFin = $frame->isFin();
         $isIncremental = ($call instanceof IncrementalDispatchable);
         
+        list($isFin, $rsv, $opcode, $payload) = $frameArr;
+        
         if ($isIncremental && $isFin) {
-            $payload = $frame->getPayload();
             $call->onSuccess($payload, $callId);
             $this->checkin($workerSession);
         } elseif ($isIncremental) {
-            $payload = $frame->getPayload();
             $call->onIncrement($payload, $callId);
         } elseif ($isFin) {
-            $result = $this->inProgressResponses->offsetGet($workerSession) . $frame->getPayload();
+            $result = $this->inProgressResponses->offsetGet($workerSession) . $payload;
             $result = unserialize($result);
             
             try {
@@ -260,7 +255,7 @@ class ProcessDispatcher {
                 throw $e;
             }
         } else {
-            $result = $this->inProgressResponses->offsetGet($workerSession) . $frame->getPayload();
+            $result = $this->inProgressResponses->offsetGet($workerSession) . $payload;
             $this->inProgressResponses->attach($workerSession, $result);
         }
     }

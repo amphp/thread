@@ -1,7 +1,7 @@
 <?php
 
-use Amp\Async\Processes\Io\Frame,
-    Amp\Async\Processes\Io\FrameParser;
+use Amp\Async\Processes\Frame,
+    Amp\Async\Processes\FrameParser;
 
 class FrameParserTest extends PHPUnit_Framework_TestCase {
     
@@ -11,8 +11,7 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
         // 0 -------------------------------------------------------------------------------------->
         
         $payload = 'payload val';
-        $length = strlen($payload);
-        $frame = new Frame($fin=1, $rsv=0, $op=Frame::OP_DATA, $payload, $length);
+        $frame = new Frame($fin=1, $rsv=0, $op=Frame::OP_DATA, $payload);
         
         $frames[] = [$frame];
         
@@ -30,14 +29,15 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
         rewind($inputStream);
         
         $frameParser = new FrameParser($inputStream);
-        $parseResult = $frameParser->parse();
+        $frameArr = $frameParser->parse();
         
-        $this->assertInstanceOf('Amp\\Async\Processes\\Io\\Frame', $parseResult);
-        $this->assertEquals($frame->getPayload(), $parseResult->getPayload());
-        $this->assertEquals($frame->getLength(), $parseResult->getLength());
-        $this->assertEquals($frame->getOpcode(), $parseResult->getOpcode());
-        $this->assertEquals($frame->isFin(), $parseResult->isFin());
-        $this->assertEquals($frame->getRsv(), $parseResult->getRsv());
+        list($isFin, $rsv, $opcode, $payload, $length) = $frameArr;
+        
+        $this->assertEquals($frame->isFin(), $isFin);
+        $this->assertEquals($frame->getRsv(), $rsv);
+        $this->assertEquals($frame->getOpcode(), $opcode);
+        $this->assertEquals($frame->getPayload(), $payload);
+        $this->assertEquals($frame->getLength(), $length);
     }
     
     function provideMultiParseExpectations() {
@@ -48,16 +48,13 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
         $frames = [];
         
         $payload = "payload 1\n";
-        $length = strlen($payload);
-        $frames[] = new Frame($fin=0, $rsv=0, $op=Frame::OP_DATA, $payload, $length);
+        $frames[] = new Frame($fin=0, $rsv=0, $op=Frame::OP_DATA, $payload);
         
         $payload = "payload 2\n";
-        $length = strlen($payload);
-        $frames[] = new Frame($fin=0, $rsv=0, $op=Frame::OP_DATA, $payload, $length);
+        $frames[] = new Frame($fin=0, $rsv=0, $op=Frame::OP_DATA, $payload);
         
         $payload = "payload 3\n";
-        $length = strlen($payload);
-        $frames[] = new Frame($fin=0, $rsv=0, $op=Frame::OP_DATA, $payload, $length);
+        $frames[] = new Frame($fin=0, $rsv=0, $op=Frame::OP_DATA, $payload);
         
         $frames[] = new Frame($fin=1, $rsv=0, $op=Frame::OP_DATA, '1', 1);
         
@@ -88,12 +85,14 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
         
         $actualResult = '';
         while (TRUE) {
-            if (!$frame = $frameParser->parse()) {
+            if (!$frameArr = $frameParser->parse()) {
                 continue;
             }
             
-            $actualResult .= $frame->getPayload();
-            if ($frame->isFin()) {
+            list($isFin, $rsv, $opcode, $payload, $length) = $frameArr;
+            
+            $actualResult .= $payload;
+            if ($isFin) {
                 break;
             }
         }

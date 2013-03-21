@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Async\Processes\Io;
+namespace Amp\Async\Processes;
 
 class Frame {
     
@@ -73,6 +73,5 @@ class Frame {
         
         return chr($firstByte) . chr($secondByte) . $lengthBody;
     }
-    
 }
 

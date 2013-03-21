@@ -2,8 +2,8 @@
 
 use Amp\ReactorFactory,
     Amp\Async\Processes\WorkerService,
-    Amp\Async\Processes\Io\FrameParser,
-    Amp\Async\Processes\Io\FrameWriter;
+    Amp\Async\Processes\FrameParser,
+    Amp\Async\Processes\FrameWriter;
 
 date_default_timezone_set(ini_get('date.timezone') ?: 'UTC');
 
