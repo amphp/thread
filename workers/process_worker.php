@@ -9,6 +9,7 @@ date_default_timezone_set(ini_get('date.timezone') ?: 'UTC');
 
 require dirname(__DIR__) . '/autoload.php';
 
+// Include userland functions from the specified file. Otherwise, only native functions are available.
 if (!empty($argv[1])) {
     @include($argv[1]);
 }
