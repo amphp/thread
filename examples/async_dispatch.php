@@ -48,7 +48,7 @@ $reactor->repeat($interval = 1, function() use ($dispatcher, $rot13, $hello) {
 /**
  * Stop this spurious example after 10 seconds
  */
-$reactor->once($stopAfter = 10, function() use ($reactor) {
+$reactor->once($stopAfter = 30, function() use ($reactor) {
    $reactor->stop();
 });
 

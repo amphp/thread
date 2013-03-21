@@ -266,6 +266,8 @@ class ProcessDispatcher {
     }
     
     private function handleUserlandError(WorkerSession $workerSession, \Exception $e) {
+        list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
+        
         try {
             $call->onError($e, $callId);
             $this->checkin($workerSession);
