@@ -17,8 +17,7 @@ class ProcessDispatcher {
     private $workerSessions;
     private $writableWorkers;
     private $workerCallMap;
-    private $callWorkerMap;
-    private $inProgressResponses;
+    private $callWorkerMap = [];
     private $availableWorkers = [];
     private $timeoutSchedule = [];
     
@@ -40,11 +39,9 @@ class ProcessDispatcher {
         $this->workerCmd = $workerCmd;
         $this->workerSessionFactory = $wsf ?: new WorkerSessionFactory;
         
-        $this->workerSessions       = new \SplObjectStorage;
-        $this->writableWorkers      = new \SplObjectStorage;
-        $this->workerCallMap        = new \SplObjectStorage;
-        $this->callWorkerMap        = new \SplObjectStorage;
-        $this->inProgressResponses  = new \SplObjectStorage;
+        $this->workerSessions  = new \SplObjectStorage;
+        $this->writableWorkers = new \SplObjectStorage;
+        $this->workerCallMap   = new \SplObjectStorage;
     }
     
     function setMaxWorkers($maxWorkers) {
@@ -84,7 +81,7 @@ class ProcessDispatcher {
         if ($this->autoTimeoutSubscription) {
             $this->autoTimeoutSubscription->enable();
         } else {
-            $this->autoTimeoutSubscription = $this->reactor->repeat($this->autoTimeoutInterval, function() {
+            $this->autoTimeoutSubscription = $this->reactor->repeat(1, function() {
                 if ($this->timeoutSchedule) {
                     $this->autoTimeout();
                 }
@@ -112,86 +109,35 @@ class ProcessDispatcher {
     }
     
     function call(callable $onResult, $procedure, $varArgs = NULL) {
-        $workload = array_slice(func_get_args(), 2);
-        
-        $onSuccess = function($result) use ($onResult) {
-            $callResult = new CallResult($result, $error = NULL);
-            $onResult($callResult);
-        };
-        
-        $onError = function($error) use ($onResult) {
-            $callResult = new CallResult($result = NULL, $error);
-            $onResult($callResult);
-        };
-        
-        $task = new Task($procedure, $workload, $onSuccess, $onError);
-        
-        return $this->dispatch($task);
-    }
-    
-    function dispatch(Dispatchable $call) {
         $callId = uniqid();
-        $this->callQueue[$callId] = $call;
+        $workload = array_slice(func_get_args(), 2);
+        $this->callQueue[$callId] = [$onResult, $procedure, $workload, $result = NULL];
         
         if ($this->autoTimeoutInterval) {
-            $this->timeoutSchedule[$callId] = [$call, time() + $this->autoTimeoutInterval];
+            $this->timeoutSchedule[$callId] = (time() + $this->autoTimeoutInterval);
         }
         
-        $this->checkout();
+        if ($this->availableWorkers) {
+            $this->checkout();
+        }
         
         return $callId;
     }
     
-    private function autoTimeout() {
-        $now = time();
-        $timeoutsToClear = [];
-        
-        foreach ($this->timeoutSchedule as $callId => $callTimeoutArr) {
-            list($call, $cutoffTime) = $callTimeoutArr;
-            
-            if ($now < $cutoffTime) {
-                break;
-            }
-            
-            $timeoutsToClear[] = $callId;
-            
-            if (isset($this->callQueue[$callId])) {
-                unset($this->callQueue[$callId]);
-            } else {
-                $workerSession = $this->callWorkerMap->offsetGet($call);
-                $this->unloadWorkerSession($workerSession);
-            }
-            
-            $call->onError(new TimeoutException, $callId);
-        }
-        
-        if ($timeoutsToClear) {
-            foreach ($timeoutsToClear as $callId) {
-                unset($this->timeoutSchedule[$callId]);
-            }
-        }
-    }
-    
     private function checkout() {
-        if (!$this->availableWorkers) {
-            return;
-        }
-        
         $workerSession = array_shift($this->availableWorkers);
         $callId = key($this->callQueue);
-        $call = $this->callQueue[$callId];
+        $callArr = $this->callQueue[$callId];
         unset($this->callQueue[$callId]);
         
-        $this->workerCallMap->attach($workerSession, [$call, $callId]);
-        $this->callWorkerMap->attach($call, $workerSession);
+        $this->workerCallMap->attach($workerSession, [$callArr, $callId]);
+        $this->callWorkerMap[$callId] = $workerSession;
         
-        if (!$call instanceof IncrementalDispatchable) {
-            $this->inProgressResponses->attach($workerSession, '');
-        }
-        
-        $payload = [$call->getProcedure(), $call->getWorkload()];
-        $payload = serialize($payload);
-        $frame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
+        $procedure = $callArr[1];
+        $workload  = $callArr[2];
+        $payload   = [$procedure, $workload];
+        $payload   = serialize($payload);
+        $frame     = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
         
         $this->write($workerSession, $frame);
     }
@@ -232,39 +178,36 @@ class ProcessDispatcher {
     }
     
     private function receiveDataFrame(WorkerSession $workerSession, array $frameArr) {
-        list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
-        
-        $isIncremental = ($call instanceof IncrementalDispatchable);
-        
+        list($callArr, $callId) = $this->workerCallMap->offsetGet($workerSession);
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
+        list($onResult, $procedure, $workload, $result) = $callArr;
         
-        if ($isIncremental && $isFin) {
-            $call->onSuccess($payload, $callId);
-            $this->checkin($workerSession);
-        } elseif ($isIncremental) {
-            $call->onIncrement($payload, $callId);
-        } elseif ($isFin) {
-            $result = $this->inProgressResponses->offsetGet($workerSession) . $payload;
-            $result = unserialize($result);
-            
+        if ($isFin) {
+            $callResult = new CallResult(unserialize($result . $payload));
             try {
-                $call->onSuccess($result, $callId);
+                $onResult($callResult, $callId);
                 $this->checkin($workerSession);
             } catch (\Exception $e) {
                 $this->checkin($workerSession);
                 throw $e;
             }
         } else {
-            $result = $this->inProgressResponses->offsetGet($workerSession) . $payload;
-            $this->inProgressResponses->attach($workerSession, $result);
+            $result = $result . $payload;
+            $callArr = [$onResult, $procedure, $workload, $result];
+            $this->workerCallMap->attach($workerSession, [$callArr, $callId]);
         }
     }
     
     private function handleUserlandError(WorkerSession $workerSession, \Exception $e) {
-        list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
+        list($callArr, $callId) = $this->workerCallMap->offsetGet($workerSession);
+        
+        unset($this->timeoutSchedule[$callId]);
+        
+        $onResult = $callArr[0];
+        $callResult = new CallResult(NULL, $e);
         
         try {
-            $call->onError($e, $callId);
+            $onResult($callResult, $callId);
             $this->checkin($workerSession);
         } catch (\Exception $e) {
             $this->checkin($workerSession);
@@ -273,19 +216,23 @@ class ProcessDispatcher {
     }
     
     private function handleInternalError(WorkerSession $workerSession, \Exception $e) {
+        $this->unloadWorkerSession($workerSession);
+        
         if ($this->workerCallMap->contains($workerSession)) {
-            list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
+            list($callArr, $callId) = $this->workerCallMap->offsetGet($workerSession);
             unset($this->timeoutSchedule[$callId]);
-            $call->onError($e, $callId);
+            
+            $onResult = $callArr[0];
+            $callResult = new CallResult(NULL, $e);
+            $onResult($callResult, $callId);
         }
         
-        $this->unloadWorkerSession($workerSession);
         $this->spawnWorkerSession();
     }
     
     private function write(WorkerSession $workerSession, Frame $frame = NULL) {
         try {
-            if ($completedFrame = $workerSession->write($frame)) {
+            if ($allFramesWritten = $workerSession->write($frame)) {
                 $this->writableWorkers->detach($workerSession);
             }
         } catch (ResourceException $e) {
@@ -294,13 +241,14 @@ class ProcessDispatcher {
     }
     
     private function checkin(WorkerSession $workerSession) {
-        list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
-        unset($this->timeoutSchedule[$callId]);
-            
-        $this->callWorkerMap->detach($call);
-        $this->workerCallMap->detach($workerSession);
-        $this->inProgressResponses->detach($workerSession);
+        list($callArr, $callId) = $this->workerCallMap->offsetGet($workerSession);
         
+        unset(
+            $this->timeoutSchedule[$callId],
+            $this->callWorkerMap[$callId]
+        );
+            
+        $this->workerCallMap->detach($workerSession);
         $this->availableWorkers[] = $workerSession;
         
         if ($this->callQueue) {
@@ -313,13 +261,13 @@ class ProcessDispatcher {
         
         if ($this->workerCallMap->contains($workerSession)) {
             list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
+            unset(
+                $this->timeoutSchedule[$callId],
+                $this->callWorkerMap[$callId]
+            );
             
-            $this->callWorkerMap->detach($call);
             $this->workerCallMap->detach($workerSession);
-            $this->inProgressResponses->detach($workerSession);
             $this->writableWorkers->detach($workerSession);
-            
-            unset($this->timeoutSchedule[$callId]);
             
         } else {
             $availabilityKey = array_search($workerSession, $this->availableWorkers);
@@ -327,6 +275,26 @@ class ProcessDispatcher {
         }
         
         $this->workerSessions->detach($workerSession);
+    }
+    
+    private function autoTimeout() {
+        $now = time();
+        
+        foreach ($this->timeoutSchedule as $callId => $cutoffTime) {
+            if ($now < $cutoffTime) {
+                break;
+            }
+            
+            if (isset($this->callWorkerMap[$callId])) {
+                $workerSession = $this->callWorkerMap[$callId];
+                $onResult = $this->workerCallMap->offsetGet($workerSession)[0][0];
+                $this->unloadWorkerSession($workerSession);
+            } else {
+                unset($this->callQueue[$callId]);
+            }
+            
+            $onResult(new TimeoutException, $callId);
+        }
     }
     
     function __destruct() {

@@ -13,15 +13,6 @@ interface Dispatcher {
      * @return string Returns the task's call ID
      */
     function call(callable $onResult, $procedureName, $varArgs = NULL);
-    
-    /**
-     * Asynchronously execute a dispatchable task
-     * 
-     * @param Dispatchable $task The dispatchable task instance to execute
-     * @return string Returns the task's call ID
-     */
-    function dispatch(Dispatchable $task);
-    
     function start();
     function stop();
     

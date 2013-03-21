@@ -7,7 +7,6 @@ use Amp\Async\Processes\ProcessDispatcher,
 date_default_timezone_set(ini_get('date.timezone') ?: 'UTC');
 
 require dirname(__DIR__) . '/autoload.php';
-require __DIR__ . '/support_files/MyAsyncFunctionCall.php';
 
 $phpBinary    = '/usr/bin/php'; // Or something like C:/php/php.exe in windows
 $workerScript = dirname(__DIR__) . '/workers/process_worker.php';
@@ -21,8 +20,9 @@ $dispatcher = new ProcessDispatcher($reactor, $workerCmd);
 $dispatcher->start();
 
 
-// Asynchronously call `sleep(5)` and exit the program when it returns
 $afterSleep = function() use ($reactor) { $reactor->stop(); };
+
+// Asynchronously call `sleep(5)` and exit the event loop when it returns
 $reactor->once($delay = 0, function() use ($dispatcher, $afterSleep) {
     $dispatcher->call($afterSleep, 'sleep', 5);
 });
@@ -34,10 +34,11 @@ $reactor->repeat($interval = 1, function() {
 });
 
 
-// Asynchronously call `str_rot13('my string')` as soon as the reactor starts (because we can)
 $onRot13Result = function(CallResult $result) {
     echo "str_rot13() result: ", $result->getResult(), "\n";
 };
+
+// Asynchronously call `str_rot13('my string')` as soon as the reactor starts (because we can)
 $reactor->once($delay = 0, function() use ($dispatcher, $onRot13Result) {
     $dispatcher->call($onRot13Result, 'str_rot13', 'my string');
 });
