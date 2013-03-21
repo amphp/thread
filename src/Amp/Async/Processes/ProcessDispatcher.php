@@ -3,10 +3,7 @@
 namespace Amp\Async\Processes;
 
 use Amp\Reactor,
-    Amp\Async\Task,
     Amp\Async\CallResult,
-    Amp\Async\Dispatchable,
-    Amp\Async\IncrementalDispatchable,
     Amp\Async\TimeoutException;
 
 class ProcessDispatcher {
@@ -20,9 +17,18 @@ class ProcessDispatcher {
     private $callWorkerMap = [];
     private $availableWorkers = [];
     private $timeoutSchedule = [];
-    
+
+    /**
+     * @var \Amp\Subscription
+     */
     private $autoWriteSubscription;
+
+    /**
+     * @var \Amp\Subscription
+     */
     private $autoTimeoutSubscription;
+
+    private $callQueue = [];
     
     private $workerCmd;
     private $workerCwd;
@@ -236,7 +242,7 @@ class ProcessDispatcher {
                 $this->writableWorkers->detach($workerSession);
             }
         } catch (ResourceException $e) {
-            return $this->handleInternalError($workerSession, $e);
+            $this->handleInternalError($workerSession, $e);
         }
     }
     
@@ -290,6 +296,7 @@ class ProcessDispatcher {
                 $onResult = $this->workerCallMap->offsetGet($workerSession)[0][0];
                 $this->unloadWorkerSession($workerSession);
             } else {
+                $onResult = $this->callQueue[$callId][0];
                 unset($this->callQueue[$callId]);
             }
             
