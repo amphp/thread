@@ -300,7 +300,8 @@ class ProcessDispatcher {
                 unset($this->callQueue[$callId]);
             }
             
-            $onResult(new TimeoutException, $callId);
+            $callResult = new CallResult($result = NULL, new TimeoutException);
+            $onResult($callResult, $callId);
         }
     }
     
