@@ -35,9 +35,10 @@ class ProcessDispatcher implements Dispatcher {
     private $workerCwd;
     private $maxWorkers = 5;
     
+    private $callTimeout = 30;
     private $readTimeout = 60;
     private $autoWriteInterval = 0.025;
-    private $autoTimeoutInterval = 30;
+    private $autoTimeoutInterval = 1;
     private $writeErrorsTo = STDERR;
     private $isStarted = FALSE;
     
@@ -59,8 +60,8 @@ class ProcessDispatcher implements Dispatcher {
         $this->workerCwd = $workerCwd;
     }
     
-    function setAutoTimeoutInterval($seconds) {
-        $this->autoTimeoutInterval = filter_var($seconds, FILTER_VALIDATE_INT, ['options' => [
+    function setCallTimeout($seconds) {
+        $this->callTimeout = filter_var($seconds, FILTER_VALIDATE_INT, ['options' => [
             'min_range' => 0,
             'default' => 30
         ]]);
@@ -91,9 +92,9 @@ class ProcessDispatcher implements Dispatcher {
             });
         }
         
-        if ($this->autoTimeoutSubscription) {
+        if ($this->callTimeout && $this->autoTimeoutSubscription) {
             $this->autoTimeoutSubscription->enable();
-        } else {
+        } elseif ($this->callTimeout) {
             $this->autoTimeoutSubscription = $this->reactor->repeat(1, function() {
                 if ($this->timeoutSchedule) {
                     $this->autoTimeout();
@@ -101,7 +102,7 @@ class ProcessDispatcher implements Dispatcher {
             });
         }
         
-        $this->isStarted = TRUE;
+        return $this->isStarted = TRUE;
     }
     
     private function spawnWorkerSession() {
@@ -127,8 +128,8 @@ class ProcessDispatcher implements Dispatcher {
         $workload = array_slice(func_get_args(), 2);
         $this->callQueue[$callId] = [$onResult, $procedure, $workload, $result = NULL];
         
-        if ($this->autoTimeoutInterval) {
-            $this->timeoutSchedule[$callId] = (time() + $this->autoTimeoutInterval);
+        if ($this->callTimeout) {
+            $this->timeoutSchedule[$callId] = (time() + $this->callTimeout);
         }
         
         if ($this->availableWorkers) {

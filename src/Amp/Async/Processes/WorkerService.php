@@ -13,6 +13,8 @@ class WorkerService {
     function __construct(FrameParser $parser, FrameWriter $writer) {
         $this->parser = $parser;
         $this->writer = $writer;
+        
+        ob_start();
     }
     
     function onReadable() {
@@ -21,10 +23,6 @@ class WorkerService {
         }
         
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
-        
-        if ($opcode == Frame::OP_CLOSE) {
-            return $this->close();
-        }
         
         $this->buffer .= $payload;
         
@@ -44,6 +42,8 @@ class WorkerService {
                 $opcode = Frame::OP_ERROR;
             }
             
+            ob_clean();
+            
             $this->buffer = '';
             
             $frame = new Frame($fin = 1, $rsv = 0, $opcode, $result);
@@ -52,10 +52,6 @@ class WorkerService {
                 while (!$this->writer->write());
             }
         }
-    }
-    
-    function close() {
-        die;
     }
     
 }
