@@ -3,10 +3,11 @@
 namespace Amp\Async\Processes;
 
 use Amp\Reactor,
+    Amp\Async\Dispatcher,
     Amp\Async\CallResult,
     Amp\Async\TimeoutException;
 
-class ProcessDispatcher {
+class ProcessDispatcher implements Dispatcher {
     
     private $reactor;
     private $workerSessionFactory;
