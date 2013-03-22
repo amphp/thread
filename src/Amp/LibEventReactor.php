@@ -35,12 +35,10 @@ class LibEventReactor implements Reactor {
     
     function run() {
         event_base_loop($this->base);
-        $this->garbage = [];
     }
     
     function stop() {
         event_base_loopexit($this->base);
-        $this->garbage = [];
     }
     
     function once($delay, callable $callback) {
