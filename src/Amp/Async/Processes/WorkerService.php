@@ -9,6 +9,7 @@ class WorkerService {
     private $parser;
     private $writer;
     private $buffer;
+    private $serializeWorkload = TRUE;
     
     function __construct(FrameParser $parser, FrameWriter $writer) {
         $this->parser = $parser;
@@ -28,10 +29,15 @@ class WorkerService {
         
         if ($isFin) {
             
-            list($procedure, $args) = unserialize($this->buffer);
+            $procedureDelimiterPos = strpos($this->buffer, ',');
+            $procedure = substr($this->buffer, 0, $procedureDelimiterPos);
+            $workload  = substr($this->buffer, $procedureDelimiterPos + 1);
+            $workload  = $this->serializeWorkload ? unserialize($workload) : $workload;
             
             try {
-                $result = serialize(call_user_func_array($procedure, $args));
+                $result = call_user_func_array($procedure, $workload);
+                $result = $this->serializeWorkload ? serialize($result) : $result;
+                
                 $opcode = Frame::OP_DATA;
             } catch (\Exception $e) {
                 $result = new ProcedureException(

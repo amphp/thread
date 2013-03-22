@@ -39,6 +39,7 @@ class ProcessDispatcher implements Dispatcher {
     private $readTimeout = 60;
     private $autoWriteInterval = 0.025;
     private $autoTimeoutInterval = 1;
+    private $serializeWorkload = TRUE;
     private $writeErrorsTo = STDERR;
     private $isStarted = FALSE;
     
@@ -65,6 +66,10 @@ class ProcessDispatcher implements Dispatcher {
             'min_range' => 0,
             'default' => 30
         ]]);
+    }
+    
+    function serializeWorkload($boolFlag) {
+        $this->serializeWorkload = filter_var($boolFlag, FILTER_VALIDATE_BOOLEAN);
     }
     
     function setGranularity($bytes) {
@@ -125,8 +130,13 @@ class ProcessDispatcher implements Dispatcher {
     function call(callable $onResult, $procedure, $varArgs = NULL) {
         $callId = uniqid();
         
-        $workload = array_slice(func_get_args(), 2);
-        $this->callQueue[$callId] = [$onResult, $procedure, $workload, $result = NULL];
+        $workload = $this->serializeWorkload
+            ? serialize(array_slice(func_get_args(), 2))
+            : $varArgs;
+        
+        $rawRequest = $procedure . ',' . $workload;
+        
+        $this->callQueue[$callId] = [$onResult, $rawRequest, $result = NULL];
         
         if ($this->callTimeout) {
             $this->timeoutSchedule[$callId] = (time() + $this->callTimeout);
@@ -143,16 +153,13 @@ class ProcessDispatcher implements Dispatcher {
         $workerSession = array_shift($this->availableWorkers);
         $callId = key($this->callQueue);
         $callArr = $this->callQueue[$callId];
+        
         unset($this->callQueue[$callId]);
         
         $this->workerCallMap->attach($workerSession, [$callArr, $callId]);
         $this->callWorkerMap[$callId] = $workerSession;
         
-        $procedure = $callArr[1];
-        $workload  = $callArr[2];
-        $payload   = [$procedure, $workload];
-        $payload   = serialize($payload);
-        $frame     = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
+        $frame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $rawRequest = $callArr[1]);
         
         if (!$this->write($workerSession, $frame)) {
             $this->writableWorkers->attach($workerSession);
@@ -197,10 +204,13 @@ class ProcessDispatcher implements Dispatcher {
     private function receiveDataFrame(WorkerSession $workerSession, array $frameArr) {
         list($callArr, $callId) = $this->workerCallMap->offsetGet($workerSession);
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
-        list($onResult, $procedure, $workload, $result) = $callArr;
+        list($onResult, $rawRequest, $result) = $callArr;
+        
+        $result = $result . $payload;
         
         if ($isFin) {
-            $callResult = new CallResult(unserialize($result . $payload));
+            $result = $this->serializeWorkload ? unserialize($result) : $result;
+            $callResult = new CallResult($result, $error = NULL);
             try {
                 $onResult($callResult, $callId);
                 $this->checkin($workerSession);
@@ -209,7 +219,6 @@ class ProcessDispatcher implements Dispatcher {
                 throw $e;
             }
         } else {
-            $result = $result . $payload;
             $callArr = [$onResult, $procedure, $workload, $result];
             $this->workerCallMap->attach($workerSession, [$callArr, $callId]);
         }
