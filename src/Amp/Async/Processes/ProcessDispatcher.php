@@ -66,6 +66,10 @@ class ProcessDispatcher implements Dispatcher {
         ]]);
     }
     
+    function setGranularity($bytes) {
+        $this->workerSessionFactory->setGranularity($bytes);
+    }
+    
     function start() {
         if ($this->isStarted) {
             return;
@@ -80,7 +84,9 @@ class ProcessDispatcher implements Dispatcher {
         } else {
             $this->autoWriteSubscription = $this->reactor->repeat($this->autoWriteInterval, function() {
                 foreach ($this->writableWorkers as $workerSession) {
-                    $this->write($workerSession);
+                    if ($this->write($workerSession)) {
+                        $this->writableWorkers->detach($workerSession);
+                    }
                 }
             });
         }
@@ -117,6 +123,7 @@ class ProcessDispatcher implements Dispatcher {
     
     function call(callable $onResult, $procedure, $varArgs = NULL) {
         $callId = uniqid();
+        
         $workload = array_slice(func_get_args(), 2);
         $this->callQueue[$callId] = [$onResult, $procedure, $workload, $result = NULL];
         
@@ -146,7 +153,9 @@ class ProcessDispatcher implements Dispatcher {
         $payload   = serialize($payload);
         $frame     = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
         
-        $this->write($workerSession, $frame);
+        if (!$this->write($workerSession, $frame)) {
+            $this->writableWorkers->attach($workerSession);
+        }
     }
     
     private function read(WorkerSession $workerSession, $triggeredBy) {
@@ -239,9 +248,7 @@ class ProcessDispatcher implements Dispatcher {
     
     private function write(WorkerSession $workerSession, Frame $frame = NULL) {
         try {
-            if ($allFramesWritten = $workerSession->write($frame)) {
-                $this->writableWorkers->detach($workerSession);
-            }
+            return $workerSession->write($frame);
         } catch (ResourceException $e) {
             $this->handleInternalError($workerSession, $e);
         }
