@@ -8,12 +8,14 @@ class LibEventReactor implements Reactor {
     
     private $base;
     private $subscriptions;
+    private $repeatIterationMap;
     private $resolution = 1000000;
     private $garbage = [];
     
     function __construct() {
         $this->base = event_base_new();
         $this->subscriptions = new \SplObjectStorage;
+        $this->repeatIterationMap = new \SplObjectStorage;
         $this->registerGarbageCollector();
     }
     
@@ -66,14 +68,29 @@ class LibEventReactor implements Reactor {
         return $subscription;
     }
     
-    function repeat($interval, callable $callback) {
+    function repeat($interval, callable $callback, $iterations = 0) {
         $event = event_new();
         $interval = ($interval > 0) ? ($interval * $this->resolution) : 0;
         
-        $wrapper = function() use ($callback, $event, $interval) {
+        $subscription = new LibEventSubscription($this, $event, $interval);
+        $this->subscriptions->attach($subscription, $event);
+        
+        $iterations = filter_var($iterations, FILTER_VALIDATE_INT, ['options' => [
+            'min_range' => 0,
+            'default' => 0
+        ]]);
+        
+        if ($iterations) {
+            $this->repeatIterationMap->attach($subscription, $iterations);
+        }
+        
+        $wrapper = function() use ($callback, $event, $interval, $iterations, $subscription) {
             try {
                 $callback();
-                event_add($event, $interval);
+                
+                if (!$iterations || $this->canRepeat($subscription)) {
+                    event_add($event, $interval);
+                }
             } catch (\Exception $e) {
                 $this->stop();
                 throw $e;
@@ -84,10 +101,19 @@ class LibEventReactor implements Reactor {
         event_base_set($event, $this->base);
         event_add($event, $interval);
         
-        $subscription = new LibEventSubscription($this, $event, $interval);
-        $this->subscriptions->attach($subscription, $event);
-        
         return $subscription;
+    }
+    
+    private function canRepeat(LibEventSubscription $subscription) {
+        $remainingIterations = $this->repeatIterationMap->offsetGet($subscription);
+        
+        if (--$remainingIterations > 0) {
+            $this->repeatIterationMap->offsetSet($subscription, $remainingIterations);
+            return TRUE;
+        } else {
+            $this->cancel($subscription);
+            return FALSE;
+        }
     }
     
     function onReadable($ioStream, callable $callback, $timeout = -1) {
@@ -129,6 +155,7 @@ class LibEventReactor implements Reactor {
     function cancel(Subscription $subscription) {
         $subscription->disable();
         $this->subscriptions->detach($subscription);
+        $this->repeatIterationMap->detach($subscription);
         $this->garbage[] = $subscription;
     }
     

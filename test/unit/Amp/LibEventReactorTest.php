@@ -104,5 +104,18 @@ class LibEventReactorTest extends PHPUnit_Framework_TestCase {
         $reactor->run();
     }
     
+    function testRepeatCancelsSubscriptionAfterSpecifiedNumberOfIterations() {
+        $this->skipIfMissingExtLibevent();
+        $reactor = new LibEventReactor;
+        
+        $counter = 0;
+        
+        $reactor->repeat($delay = 0, function() use (&$counter) { ++$counter; }, $iterations = 3);
+        $reactor->once($delay = 0.005, function() use ($reactor, $counter) { $reactor->stop(); });
+        
+        $reactor->run();
+        $this->assertEquals(3, $counter);
+    }
+    
 }
 
