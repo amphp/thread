@@ -1,7 +1,7 @@
 <?php
 
-use Amp\Async\Processes\Frame,
-    Amp\Async\Processes\FrameWriter;
+use Amp\Async\Frame,
+    Amp\Async\FrameWriter;
 
 class FrameWriterTest extends PHPUnit_Framework_TestCase {
     

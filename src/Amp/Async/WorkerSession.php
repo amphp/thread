@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Async\Processes;
+namespace Amp\Async;
 
 class WorkerSession {
     

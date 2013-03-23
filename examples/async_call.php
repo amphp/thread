@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Async\Processes\ProcessDispatcher,
+use Amp\Async\ProcessDispatcher,
     Amp\Async\CallResult,
     Amp\ReactorFactory;
 

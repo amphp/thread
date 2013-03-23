@@ -13,8 +13,6 @@ interface Dispatcher {
      * @return string Returns the task's call ID
      */
     function call(callable $onResult, $procedureName, $varArgs = NULL);
-    function start();
-    function stop();
     
 }
 

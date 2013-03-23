@@ -1,15 +1,13 @@
 <?php
 
-namespace Amp\Async\Processes;
+namespace Amp\Async;
 
-use Amp\Reactor,
-    Amp\Async\Dispatcher,
-    Amp\Async\CallResult,
-    Amp\Async\TimeoutException;
+use Amp\Reactor;
 
 class ProcessDispatcher implements Dispatcher {
     
     const MAX_CALL_ID = 2147483648;
+    const PROCEDURE_DELIMITER = ',';
     
     private $reactor;
     private $workerSessionFactory;
@@ -139,7 +137,7 @@ class ProcessDispatcher implements Dispatcher {
             ? serialize(array_slice(func_get_args(), 2))
             : $varArgs;
         
-        $rawRequest = $procedure . ',' . $workload;
+        $rawRequest = $procedure . self::PROCEDURE_DELIMITER . $workload;
         
         $this->callQueue[$callId] = [$onResult, $rawRequest, $result = NULL];
         
@@ -328,11 +326,6 @@ class ProcessDispatcher implements Dispatcher {
         }
     }
     
-    function __destruct() {
-        $this->stop();
-        $this->autoWriteSubscription->cancel();
-    }
-    
     function stop() {
         if ($this->isStarted) {
             $this->autoWriteSubscription->disable();
@@ -343,6 +336,11 @@ class ProcessDispatcher implements Dispatcher {
         }
         
         $this->isStarted = FALSE;
+    }
+    
+    function __destruct() {
+        $this->stop();
+        $this->autoWriteSubscription->cancel();
     }
     
 }

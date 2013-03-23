@@ -1,7 +1,7 @@
 <?php
 
-use Amp\Async\Processes\Frame,
-    Amp\Async\Processes\FrameParser;
+use Amp\Async\Frame,
+    Amp\Async\FrameParser;
 
 class FrameParserTest extends PHPUnit_Framework_TestCase {
     
