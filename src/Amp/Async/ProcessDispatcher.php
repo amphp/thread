@@ -198,6 +198,9 @@ class ProcessDispatcher implements Dispatcher {
                 $this->handleUserlandError($workerSession, new WorkerException($payload));
                 break;
             default:
+                /**
+                 * @TODO Figure out a way to make this problem easier to debug
+                 */
                 throw new \UnexpectedValueException(
                     'Unexpected frame OPCODE: ' . $opcode
                 );
