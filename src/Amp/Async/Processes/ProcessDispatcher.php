@@ -9,6 +9,8 @@ use Amp\Reactor,
 
 class ProcessDispatcher implements Dispatcher {
     
+    const MAX_CALL_ID = 2147483648;
+    
     private $reactor;
     private $workerSessionFactory;
     
@@ -42,6 +44,7 @@ class ProcessDispatcher implements Dispatcher {
     private $serializeWorkload = TRUE;
     private $writeErrorsTo = STDERR;
     private $isStarted = FALSE;
+    private $lastCallId = 0;
     
     function __construct(Reactor $reactor, $workerCmd, WorkerSessionFactory $wsf = NULL) {
         $this->reactor = $reactor;
@@ -128,7 +131,9 @@ class ProcessDispatcher implements Dispatcher {
     }
     
     function call(callable $onResult, $procedure, $varArgs = NULL) {
-        $callId = uniqid();
+        if (($callId = ++$this->lastCallId) == self::MAX_CALL_ID) {
+            $this->lastCallId = 0;
+        }
         
         $workload = $this->serializeWorkload
             ? serialize(array_slice(func_get_args(), 2))
