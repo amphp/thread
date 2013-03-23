@@ -10,8 +10,17 @@ class ReactorFactory {
      *       `stream_select` so that the library is usable without PECL libevent.
      */
     function select() {
-        return new LibEventReactor;
+        if ($this->hasLibevent()) {
+            return new LibEventReactor;
+        } else {
+            throw new \RuntimeException(
+                'ext/libevent not available'
+            );
+        }
     }
     
+    protected function hasLibevent() {
+        return extension_loaded('libevent');
+    }
 }
 
