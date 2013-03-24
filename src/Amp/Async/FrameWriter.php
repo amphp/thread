@@ -9,7 +9,7 @@ class FrameWriter {
     private $frameQueue = [];
     private $buffer;
     private $bufferSize;
-    private $granularity = 32768;
+    private $granularity = 65536;
     
     function __construct($ouputStream) {
         $this->ouputStream = $ouputStream;

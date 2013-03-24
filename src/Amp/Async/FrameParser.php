@@ -20,7 +20,7 @@ class FrameParser {
     private $length;
     private $payload;
     
-    private $granularity = 32768;
+    private $granularity = 65536;
     
     function __construct($inputStream) {
         $this->inputStream = $inputStream;

@@ -4,7 +4,7 @@ namespace Amp\Async;
 
 class WorkerSessionFactory {
     
-    private $granularity = 32768;
+    private $granularity = 65536;
     
     function __invoke($cmd, $errorStream = NULL, $cwd = NULL) {
         $worker = new Worker($cmd, $errorStream, $cwd);
@@ -23,7 +23,7 @@ class WorkerSessionFactory {
     function setGranularity($bytes) {
         $this->granularity = filter_var($bytes, FILTER_VALIDATE_INT, ['options' => [
             'min_range' => 1,
-            'default' => 32768
+            'default' => 65536
         ]]);
     }
     
