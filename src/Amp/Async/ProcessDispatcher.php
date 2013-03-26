@@ -6,7 +6,7 @@ use Amp\Reactor;
 
 class ProcessDispatcher implements Dispatcher {
     
-    const MAX_CALL_ID = 2147483648;
+    const MAX_CALL_ID = 2147483647;
     const PROCEDURE_DELIMITER = ',';
     
     private $reactor;
@@ -170,7 +170,7 @@ class ProcessDispatcher implements Dispatcher {
     }
     
     private function read(WorkerSession $workerSession, $triggeredBy) {
-        if ($triggeredBy != Reactor::TIMEOUT) {
+        if ($triggeredBy !== Reactor::TIMEOUT) {
             try {
                 if ($frameArr = $workerSession->parse()) {
                     $this->receiveParsedFrame($workerSession, $frameArr);
