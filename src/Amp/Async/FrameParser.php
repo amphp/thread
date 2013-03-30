@@ -31,10 +31,9 @@ class FrameParser {
     }
     
     function parse() {
-        $data = @fread($this->inputStream, $this->granularity);
-        $this->buffer .= $data;
+        $this->buffer .= @fread($this->inputStream, $this->granularity);
         
-        if ($data || $data === '0' || isset($this->buffer[0])) {
+        if ($this->buffer || $this->buffer === '0') {
             switch ($this->state) {
                 case self::START:
                     goto start;
@@ -125,7 +124,7 @@ class FrameParser {
         }
         
         frame_complete: {
-            $frameArr = [$this->fin, $this->rsv, $this->opcode, $this->payload, $this->length];
+            $frameArr = [$this->fin, $this->rsv, $this->opcode, $this->payload];
             
             $this->state = self::START;
             

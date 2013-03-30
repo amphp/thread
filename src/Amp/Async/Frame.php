@@ -6,7 +6,7 @@ class Frame {
     
     const OP_DATA  = 0x00;
     const OP_CLOSE = 0x0A;
-    const OP_ERROR = 0x0B;
+    const OP_PING  = 0x0B;
     
     private $fin;
     private $rsv;

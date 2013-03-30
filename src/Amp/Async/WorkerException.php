@@ -2,5 +2,5 @@
 
 namespace Amp\Async;
 
-class WorkerException extends \RuntimeException {}
+class WorkerException extends \Exception {}
 

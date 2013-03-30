@@ -2,5 +2,5 @@
 
 namespace Amp\Async;
 
-class ProtocolException extends \RuntimeException {}
+class ProtocolException extends \Exception {}
 

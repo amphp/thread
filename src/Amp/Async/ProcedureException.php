@@ -2,5 +2,5 @@
 
 namespace Amp\Async;
 
-class ProcedureException extends \RuntimeException {}
+class ProcedureException extends \Exception {}
 

@@ -2,5 +2,5 @@
 
 namespace Amp\Async;
 
-class ResourceException extends \RuntimeException {}
+class ResourceException extends \Exception {}
 

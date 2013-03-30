@@ -2,5 +2,5 @@
 
 namespace Amp\Async;
 
-class TimeoutException extends \RuntimeException {}
+class TimeoutException extends \Exception {}
 
