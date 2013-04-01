@@ -249,11 +249,13 @@ class Dispatcher {
     private function handleBrokenProcessPipe(WorkerSession $workerSession, \Exception $e) {
         $workerId = spl_object_hash($workerSession);
         
-        foreach ($this->workerCallMap[$workerId] as $callId => $placeholder) {
-            $callResult = new CallResult(NULL, $e);
-            $this->onResult($callId, $callResult);
+        if (!empty($this->workerCallMap[$workerId])) {
+            foreach ($this->workerCallMap[$workerId] as $callId => $placeholder) {
+                $callResult = new CallResult(NULL, $e);
+                $this->onResult($callId, $callResult);
+            }
         }
-        
+            
         $this->unloadWorkerSession($workerSession);
         $this->spawnWorkerSession();
     }

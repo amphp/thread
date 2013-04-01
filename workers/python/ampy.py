@@ -1,5 +1,5 @@
-
-import sys, io, struct
+from struct import pack, unpack
+from sys import stdin, stdout
 
 OP_DATA     = 0x00
 OP_CLOSE    = 0x0A
@@ -46,10 +46,10 @@ class Frame:
         
         if (length > 0xFFFF):
             second_byte = 0xFF;
-            length_body = struct.pack('!L', length)
+            length_body = pack('!L', length)
         elif (length > 0xFE):
             second_byte = 0xFE
-            length_body = struct.pack('!H', length)
+            length_body = pack('!H', length)
         else:
             second_byte = length
             length_body = ""
@@ -84,9 +84,9 @@ def parse(input):
             break
     
     if (length == 254):
-        length = struct.unpack("!H", input.read(2))[0]
+        length = unpack("!H", input.read(2))[0]
     elif (length == 255):
-        length = struct.unpack("!L", input.read(4))[0]
+        length = unpack("!L", input.read(4))[0]
     
     payload = input.read(length) if length else ""
     
@@ -94,21 +94,24 @@ def parse(input):
 
 
 
-def main():
+def listen(callables):
+    '''
+    Listen for AMP procedure calls and route tasks to callables dictionary
+    '''
     
     payload = ""
     
     while (1):
-        frame = parse(sys.stdin)
+        frame = parse(stdin)
         opcode = frame.get_opcode()
         
-        if (opcode != OP_DATA):
+        if opcode != OP_DATA:
             # we don't do anything with non-data opcodes
-            pass
+            continue
         
         payload += frame.get_payload()
         
-        if (not frame.is_fin()):
+        if not frame.is_fin():
             continue
         
         packedCallId = payload[0:4]
@@ -118,54 +121,20 @@ def main():
         workload  = payload[procLen:]
         payload   = ""
         
-        procParts = procedure[0].rsplit('.', 1)
-        rsv = CALL_RESULT
-        
         try:
-            if len(procParts) > 1:
-                func = getattr(procParts[0], procParts[1])
-            elif procedure in globals():
-                func = globals()[procedure]
+            func = callables[procedure]
+            
+            if callable(func):
+                rsv = CALL_RESULT
+                result = str(func(workload))
             else:
                 raise Exception("Procedure `%s` not implemented" % procedure)
-            
-            result = func(workload)
             
         except Exception as e:
             rsv = CALL_ERROR
             result = str(e)
         
         frame = Frame(1, rsv, OP_DATA, packedCallId + result)
-        sys.stdout.write(frame.get_raw_frame())
-        sys.stdout.flush()
-
-
-
-
-
-    
-def my_func(workload):
-    return workload
-
-def hello_world(arg = None):
-    return 'Hello, World!'
-
-
-
-
-
-
-
-
-
-
-if __name__ == "__main__":
-    
-    main()
-
-
-
-
-
-
+        stdout.write(frame.get_raw_frame())
+        stdout.flush()
 
