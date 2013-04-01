@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Async\ProcessDispatcher,
+use Amp\Async\Dispatcher,
     Amp\Async\CallResult,
     Amp\ReactorFactory;
 
@@ -9,15 +9,15 @@ date_default_timezone_set(ini_get('date.timezone') ?: 'UTC');
 require dirname(__DIR__) . '/autoload.php';
 
 $phpBinary    = PHP_BINARY;
-$workerScript = dirname(__DIR__) . '/workers/process_worker.php';
+$workerScript = dirname(__DIR__) . '/workers/php/ampworker.php';
 $userInclude  = __DIR__ . '/support_files/my_async_functions.php';
 $workerCmd    = $phpBinary . ' ' . $workerScript . ' ' . $userInclude;
 
 
 // Create the process dispatcher using the worker command we created above
 $reactor = (new ReactorFactory)->select();
-$dispatcher = new ProcessDispatcher($reactor, $workerCmd);
-$dispatcher->start();
+$dispatcher = new Dispatcher($reactor);
+$dispatcher->start($poolSize = 4, $workerCmd);
 
 
 $afterSleep = function() use ($reactor) { $reactor->stop(); };
