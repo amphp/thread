@@ -25,19 +25,18 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
      */
     function testParse($frame) {
         $inputStream = fopen('php://memory', 'r+');
-        fwrite($inputStream, $frame->getHeader() . $frame->getPayload());
+        fwrite($inputStream, $frame);
         rewind($inputStream);
         
         $frameParser = new FrameParser($inputStream);
         $frameArr = $frameParser->parse();
         
-        list($isFin, $rsv, $opcode, $payload, $length) = $frameArr;
+        list($isFin, $rsv, $opcode, $payload) = $frameArr;
         
         $this->assertEquals($frame->isFin(), $isFin);
         $this->assertEquals($frame->getRsv(), $rsv);
         $this->assertEquals($frame->getOpcode(), $opcode);
         $this->assertEquals($frame->getPayload(), $payload);
-        $this->assertEquals($frame->getLength(), $length);
     }
     
     function provideMultiParseExpectations() {
@@ -74,9 +73,8 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
         $expectedResult = '';
         $inputStream = fopen('php://memory', 'r+');
         foreach ($frameArray as $frame) {
-            $payload = $frame->getPayload();
-            $expectedResult .= $payload;
-            fwrite($inputStream, $frame->getHeader() . $payload);
+            $expectedResult .= $frame->getPayload();
+            fwrite($inputStream, $frame);
         }
         rewind($inputStream);
         
@@ -89,7 +87,7 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
                 continue;
             }
             
-            list($isFin, $rsv, $opcode, $payload, $length) = $frameArr;
+            list($isFin, $rsv, $opcode, $payload) = $frameArr;
             
             $actualResult .= $payload;
             if ($isFin) {

@@ -20,7 +20,7 @@ class FrameWriterTest extends PHPUnit_Framework_TestCase {
         
         rewind($outputStream);
         
-        $expected = $frame->getHeader() . $frame->getPayload();
+        $expected = $frame->__toString();
         $actual = stream_get_contents($outputStream);
         
         $this->assertEquals($expected, $actual);
@@ -41,7 +41,7 @@ class FrameWriterTest extends PHPUnit_Framework_TestCase {
             continue;
         }
         
-        $expected = $frame1->getHeader() . $frame1->getPayload() . $frame2->getHeader() . $frame2->getPayload();
+        $expected = $frame1->__toString() . $frame2->__toString();
         rewind($outputStream);
         $actual = stream_get_contents($outputStream);
         
