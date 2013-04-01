@@ -15,7 +15,6 @@
      |                     Payload Data continued ...                |
      +---------------------------------------------------------------+
 
-
 ##### FIN:  1 bit
 
       Indicates that this is the final fragment in a message.  The first
@@ -23,7 +22,7 @@
 
 ##### RSV1, RSV2, RSV3:  1 bit each
 
-      MUST be 0 unless an extension is negotiated that defines meanings
+      MUST be 0 unless an extension is used that defines meanings
       for non-zero values. If a nonzero value is received and none of
       the negotiated extensions defines the meaning of such a nonzero
       value, the receiving endpoint MUST _Fail the Connection_.
@@ -40,7 +39,7 @@
 
       *  %xA denotes a connection close
       
-      *  %xB denotes a non-fatal application error
+      *  %xB denotes a PING notification
 
       *  %xC-F are reserved for further control frames
 

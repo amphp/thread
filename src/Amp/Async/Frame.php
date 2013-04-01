@@ -54,7 +54,7 @@ class Frame {
         return $this->length;
     }
     
-    function getHeader() {
+    function __toString() {
         $firstByte = 0x00;
         $firstByte |= ((int) $this->fin) << 7;
         $firstByte |= $this->rsv << 4;
@@ -71,7 +71,8 @@ class Frame {
             $lengthBody = '';
         }
         
-        return chr($firstByte) . chr($secondByte) . $lengthBody;
+        return chr($firstByte) . chr($secondByte) . $lengthBody . $this->payload;
     }
+    
 }
 

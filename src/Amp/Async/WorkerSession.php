@@ -18,8 +18,8 @@ class WorkerSession {
         return $this->parser->parse();
     }
     
-    function write(Frame $frame = NULL) {
-        return $this->writer->write($frame);
+    function write($callFrame = NULL) {
+        return $this->writer->write($callFrame);
     }
     
     function getWritePipe() {

@@ -21,6 +21,7 @@ class FrameParser {
     private $payload;
     
     private $granularity = 65536;
+    private $throwOnEof = TRUE;
     
     function __construct($inputStream) {
         $this->inputStream = $inputStream;
@@ -28,6 +29,10 @@ class FrameParser {
     
     function setGranularity($bytes) {
         $this->granularity = (int) $bytes;
+    }
+    
+    function throwOnEof($boolFlag) {
+        $this->throwOnEof = (bool) $boolFlag;
     }
     
     function parse() {
@@ -44,7 +49,9 @@ class FrameParser {
                 case self::PAYLOAD:
                     goto payload;
             }
-        } elseif (!is_resource($this->inputStream)) {
+        } elseif (!is_resource($this->inputStream)
+            || ($this->throwOnEof && feof($this->inputStream))
+        ) {
             throw new ResourceException(
                 'Failed reading from input stream'
             );

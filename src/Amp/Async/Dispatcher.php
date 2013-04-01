@@ -7,61 +7,46 @@ use Amp\Reactor;
 class Dispatcher {
     
     const MAX_CALL_ID = 2147483647;
+    
     const CALL        = 1;
-    const CALL_RESULT = 3;
-    const CALL_ERROR  = 7;
+    const CALL_RESULT = 2;
+    const CALL_ERROR  = 3;
     
     private $reactor;
     private $workerSessionFactory;
+    private $autoWriteSubscription;
+    private $autoTimeoutSubscription;
     
-    private $workerSessions;
-    private $writableWorkers;
-    private $workerCallMap;
+    private $workerSessions = [];
+    private $pendingCallCounts = [];
+    private $workerSubscriptions = [];
+    private $workerCallMap = [];
     private $callWorkerMap = [];
     private $availableWorkers = [];
     private $timeoutSchedule = [];
-
-    /**
-     * @var \Amp\Subscription
-     */
-    private $autoWriteSubscription;
-
-    /**
-     * @var \Amp\Subscription
-     */
-    private $autoTimeoutSubscription;
-
-    private $callQueue = [];
+    private $onResultCallbacks = [];
+    private $partialResults = [];
+    
+    private $writableWorkers;
     
     private $workerCmd;
     private $workerCwd;
-    private $maxWorkers = 5;
     
+    private $lastCallId = 0;
+    private $pendingCalls = 0;
     private $callTimeout = 30;
     private $readTimeout = 60;
     private $autoWriteInterval = 0.025;
     private $autoTimeoutInterval = 1;
     private $serializeWorkload = TRUE;
     private $writeErrorsTo = STDERR;
+    private $notifyOnPartialResult = FALSE;
     private $isStarted = FALSE;
-    private $lastCallId = 0;
     
-    function __construct(Reactor $reactor, $workerCmd, WorkerSessionFactory $wsf = NULL) {
+    function __construct(Reactor $reactor, WorkerSessionFactory $wsf = NULL) {
         $this->reactor = $reactor;
-        $this->workerCmd = $workerCmd;
         $this->workerSessionFactory = $wsf ?: new WorkerSessionFactory;
-        
-        $this->workerSessions  = new \SplObjectStorage;
         $this->writableWorkers = new \SplObjectStorage;
-        $this->workerCallMap   = new \SplObjectStorage;
-    }
-    
-    function setMaxWorkers($maxWorkers) {
-        $this->maxWorkers = (int) $maxWorkers;
-    }
-    
-    function setWorkerCwd($workerCwd) {
-        $this->workerCwd = $workerCwd;
     }
     
     function setCallTimeout($seconds) {
@@ -71,38 +56,39 @@ class Dispatcher {
         ]]);
     }
     
-    function serializeWorkload($boolFlag) {
-        $this->serializeWorkload = filter_var($boolFlag, FILTER_VALIDATE_BOOLEAN);
-    }
-    
     function setGranularity($bytes) {
         $this->workerSessionFactory->setGranularity($bytes);
     }
     
-    function start() {
+    function serializeWorkload($boolFlag) {
+        $this->serializeWorkload = filter_var($boolFlag, FILTER_VALIDATE_BOOLEAN);
+    }
+    
+    function notifyOnPartialResult($boolFlag) {
+        $this->notifyOnPartialResult = filter_var($boolFlag, FILTER_VALIDATE_BOOLEAN);
+    }
+    
+    function start($poolSize, $cmd, $cwd = NULL) {
         if ($this->isStarted) {
             return;
         }
         
-        for ($i=0; $i < $this->maxWorkers; $i++) {
+        $this->workerCmd = $cmd;
+        $this->workerCwd = $cwd;
+        
+        for ($i=0; $i < $poolSize; $i++) {
             $this->spawnWorkerSession();
         }
         
-        if ($this->autoWriteSubscription) {
-            $this->autoWriteSubscription->enable();
-        } else {
-            $this->autoWriteSubscription = $this->reactor->repeat($this->autoWriteInterval, function() {
-                foreach ($this->writableWorkers as $workerSession) {
-                    if ($this->write($workerSession)) {
-                        $this->writableWorkers->detach($workerSession);
-                    }
+        $this->autoWriteSubscription = $this->reactor->repeat($this->autoWriteInterval, function() {
+            foreach ($this->writableWorkers as $workerSession) {
+                if ($this->write($workerSession)) {
+                    $this->writableWorkers->detach($workerSession);
                 }
-            });
-        }
+            }
+        });
         
-        if ($this->callTimeout && $this->autoTimeoutSubscription) {
-            $this->autoTimeoutSubscription->enable();
-        } elseif ($this->callTimeout) {
+        if ($this->callTimeout) {
             $this->autoTimeoutSubscription = $this->reactor->repeat(1, function() {
                 if ($this->timeoutSchedule) {
                     $this->autoTimeout();
@@ -126,8 +112,11 @@ class Dispatcher {
             $this->readTimeout
         );
         
-        $this->workerSessions->attach($workerSession, $readSubscription);
-        $this->availableWorkers[] = $workerSession;
+        $workerId = spl_object_hash($workerSession);
+        
+        $this->workerSessions[$workerId] = $workerSession;
+        $this->pendingCallCounts[$workerId] = 0;
+        $this->workerSubscriptions[$workerId] = $readSubscription;
     }
     
     /**
@@ -143,185 +132,152 @@ class Dispatcher {
             $this->lastCallId = 0;
         }
         
-        $procLen  = chr(strlen($procedure));
-        $workload = $this->serializeWorkload ? serialize(array_slice(func_get_args(), 2)) : $varArgs;
-        $payload  = pack('N', $callId) . $procLen . $procedure . $workload;
+        $callId = pack('N', $callId);
         
-        $this->callQueue[$callId] = [$onResult, $payload, $result = NULL];
+        $this->onResultCallbacks[$callId] = $onResult;
+        $this->partialResults[$callId] = NULL;
         
         if ($this->callTimeout) {
             $this->timeoutSchedule[$callId] = (time() + $this->callTimeout);
         }
         
-        if ($this->availableWorkers) {
-            $this->checkout();
+        asort($this->pendingCallCounts);
+        
+        $workerId = key($this->pendingCallCounts);
+        $workerSession = $this->workerSessions[$workerId];
+        
+        $this->pendingCalls++;
+        $this->pendingCallCounts[$workerId]++;
+        $this->workerCallMap[$workerId][$callId] = TRUE;
+        $this->callWorkerMap[$callId] = $workerId;
+        
+        $procLen = chr(strlen($procedure));
+        $workload = $this->serializeWorkload ? serialize(array_slice(func_get_args(), 2)) : $varArgs;
+        $payload = $callId . $procLen . $procedure . $workload;
+        $callFrame = new Frame($fin = 1, $rsv = 1, $opcode = Frame::OP_DATA, $payload);
+        
+        if (!$this->write($workerSession, $callFrame)) {
+            $this->writableWorkers->attach($workerSession);
         }
         
         return $callId;
     }
     
-    private function checkout() {
-        $workerSession = array_shift($this->availableWorkers);
-        $callId = key($this->callQueue);
-        $callArr = $this->callQueue[$callId];
-        $rawRequest = $callArr[1];
-        
-        unset($this->callQueue[$callId]);
-        
-        $this->workerCallMap->attach($workerSession, [$callArr, $callId]);
-        $this->callWorkerMap[$callId] = $workerSession;
-        
-        $frame = new Frame($fin = 1, $rsv = 0b001, $opcode = Frame::OP_DATA, $rawRequest);
-        
-        if (!$this->write($workerSession, $frame)) {
-            $this->writableWorkers->attach($workerSession);
-        }
-    }
-    
     private function read(WorkerSession $workerSession, $triggeredBy) {
-        if ($triggeredBy !== Reactor::TIMEOUT) {
-            try {
-                if ($frameArr = $workerSession->parse()) {
-                    $this->receiveParsedFrame($workerSession, $frameArr);
-                }
-            } catch (ResourceException $e) {
-                $this->handleInternalError($workerSession, $e);
-            } catch (\RuntimeException $e) {
-                $this->handleInternalError($workerSession, $e);
+        if ($triggeredBy === Reactor::TIMEOUT) {
+            return;
+        }
+        
+        try {
+            if ($frameArr = $workerSession->parse()) {
+                $this->receiveParsedFrame($workerSession, $frameArr);
             }
+        } catch (ResourceException $e) {
+            $this->handleBrokenProcessPipe($workerSession, $e);
         }
     }
     
     private function receiveParsedFrame(WorkerSession $workerSession, array $frameArr) {
-        list($isFin, $rsv, $opcode, $payload) = $frameArr;
+        $opcode = $frameArr[2];
         
         switch($opcode) {
             case Frame::OP_DATA:
-                $this->receiveDataFrame($workerSession, $frameArr);
+                $this->receiveDataFrame($frameArr);
                 break;
             case Frame::OP_CLOSE:
                 $this->unloadWorkerSession($workerSession);
                 $this->spawnWorkerSession();
                 break;
             default:
-                /**
-                 * @TODO Figure out a way to make this problem easier to debug
-                 */
                 throw new \UnexpectedValueException(
                     'Unexpected frame OPCODE: ' . $opcode
                 );
         }
     }
     
-    private function receiveDataFrame(WorkerSession $workerSession, array $frameArr) {
-        list($callArr, $callId) = $this->workerCallMap->offsetGet($workerSession);
+    private function receiveDataFrame(array $frameArr) {
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
-        list($onResult, $rawRequest, $result) = $callArr;
         
-        $result = $result . $payload;
+        $callId  = substr($payload, 0, 4);
+        $payload = substr($payload, 4);
         
-        if (!$isFin) {
-            $callArr = [$onResult, $procedure, $workload, $result];
-            $this->workerCallMap->attach($workerSession, [$callArr, $callId]);
+        if (!$isFin && $this->notifyOnPartialResult) {
+            // No RSV check is made here because error results should always set the FIN bit
+            $callResult = new CallResult($callId, $payload, $error = NULL, $isFin);
+            $callback = $this->onResultCallbacks[$callId];
+            $callback($callResult);
             return;
+        } elseif (!$isFin) {
+            $this->partialResults[$callId] .= $payload;
+            return;
+        } else {
+            $payload = $this->partialResults[$callId] . $payload;
         }
         
-        $callId = current(unpack('N', substr($result, 0, 4)));
-        $result = substr($result, 4);
-        $result = $this->serializeWorkload ? unserialize($result) : $result;
+        $payload = $this->serializeWorkload ? unserialize($payload) : $payload;
         
         if ($rsv & self::CALL_RESULT) {
-            $callResult = new CallResult($result, $error = NULL);
+            $callResult = new CallResult($callId, $payload, $error = NULL, $isFin);
         } elseif ($rsv & self::CALL_ERROR) {
-            $callResult = new CallResult(NULL, new WorkerException($result));
+            $callResult = new CallResult($callId, $result = NULL, new WorkerException($payload), $isFin);
         } else {
-            // @TODO handle invalid RSV bits
+            throw new \UnexpectedValueException(
+                'Unexpected data frame RSV value'
+            );
         }
         
-        try {
-            $onResult($callResult, $callId);
-            $this->checkin($workerSession);
-        } catch (\Exception $e) {
-            $this->checkin($workerSession);
-            throw $e;
-        }
+        $this->onResult($callId, $callResult);
     }
     
-    private function handleUserlandError(WorkerSession $workerSession, \Exception $e) {
-        list($callArr, $callId) = $this->workerCallMap->offsetGet($workerSession);
+    private function onResult($callId, $callResult) {
+        $callback = $this->onResultCallbacks[$callId];
+        $workerId = $this->callWorkerMap[$callId];
         
-        unset($this->timeoutSchedule[$callId]);
-        
-        $onResult = $callArr[0];
-        $callResult = new CallResult(NULL, $e);
-        
-        try {
-            $onResult($callResult, $callId);
-            $this->checkin($workerSession);
-        } catch (\Exception $e) {
-            $this->checkin($workerSession);
-            throw $e;
-        }
-    }
-    
-    private function handleInternalError(WorkerSession $workerSession, \Exception $e) {
-        $this->unloadWorkerSession($workerSession);
-        
-        if ($this->workerCallMap->contains($workerSession)) {
-            list($callArr, $callId) = $this->workerCallMap->offsetGet($workerSession);
-            unset($this->timeoutSchedule[$callId]);
-            
-            $onResult = $callArr[0];
-            $callResult = new CallResult(NULL, $e);
-            $onResult($callResult, $callId);
-        }
-        
-        $this->spawnWorkerSession();
-    }
-    
-    private function write(WorkerSession $workerSession, Frame $frame = NULL) {
-        try {
-            return $workerSession->write($frame);
-        } catch (ResourceException $e) {
-            $this->handleInternalError($workerSession, $e);
-        }
-    }
-    
-    private function checkin(WorkerSession $workerSession) {
-        list($callArr, $callId) = $this->workerCallMap->offsetGet($workerSession);
+        $this->pendingCallCounts[$workerId]--;
         
         unset(
             $this->timeoutSchedule[$callId],
-            $this->callWorkerMap[$callId]
+            $this->onResultCallbacks[$callId],
+            $this->partialResults[$callId],
+            $this->callWorkerMap[$callId],
+            $this->workerCallMap[$workerId][$callId]
         );
-            
-        $this->workerCallMap->detach($workerSession);
-        $this->availableWorkers[] = $workerSession;
         
-        if ($this->callQueue) {
-            $this->checkout();
+        $callback($callResult);
+    }
+    
+    private function handleBrokenProcessPipe(WorkerSession $workerSession, \Exception $e) {
+        $workerId = spl_object_hash($workerSession);
+        
+        foreach ($this->workerCallMap[$workerId] as $callId => $placeholder) {
+            $callResult = new CallResult(NULL, $e);
+            $this->onResult($callId, $callResult);
         }
+        
+        $this->unloadWorkerSession($workerSession);
+        $this->spawnWorkerSession();
     }
     
     private function unloadWorkerSession($workerSession) {
-        $this->workerSessions->offsetGet($workerSession)->cancel();
+        $workerId = spl_object_hash($workerSession);
         
-        if ($this->workerCallMap->contains($workerSession)) {
-            list($call, $callId) = $this->workerCallMap->offsetGet($workerSession);
-            unset(
-                $this->timeoutSchedule[$callId],
-                $this->callWorkerMap[$callId]
-            );
-            
-            $this->workerCallMap->detach($workerSession);
-            $this->writableWorkers->detach($workerSession);
-            
-        } else {
-            $availabilityKey = array_search($workerSession, $this->availableWorkers);
-            unset($this->availableWorkers[$availabilityKey]);
+        $subscription = $this->workerSubscriptions[$workerId];
+        $subscription->cancel();
+        
+        unset(
+            $this->pendingCallCounts[$workerId],
+            $this->workerCallMap[$workerId],
+            $this->workerSessions[$workerId],
+            $this->workerSubscriptions[$workerId]
+        );
+    }
+    
+    private function write(WorkerSession $workerSession, $callFrame = NULL) {
+        try {
+            return $workerSession->write($callFrame);
+        } catch (ResourceException $e) {
+            $this->handleBrokenProcessPipe($workerSession, $e);
         }
-        
-        $this->workerSessions->detach($workerSession);
     }
     
     private function autoTimeout() {
@@ -332,35 +288,25 @@ class Dispatcher {
                 break;
             }
             
-            if (isset($this->callWorkerMap[$callId])) {
-                $workerSession = $this->callWorkerMap[$callId];
-                $onResult = $this->workerCallMap->offsetGet($workerSession)[0][0];
-                $this->unloadWorkerSession($workerSession);
-            } else {
-                $onResult = $this->callQueue[$callId][0];
-                unset($this->callQueue[$callId]);
-            }
-            
             $callResult = new CallResult($result = NULL, new TimeoutException);
-            $onResult($callResult, $callId);
+            $this->onResult($callId, $callResult);
         }
-    }
-    
-    function stop() {
-        if ($this->isStarted) {
-            $this->autoWriteSubscription->disable();
-            
-            foreach ($this->workerSessions as $workerSession) {
-                $this->unloadWorkerSession($workerSession);
-            }
-        }
-        
-        $this->isStarted = FALSE;
     }
     
     function __destruct() {
-        $this->stop();
+        if (!$this->isStarted) {
+            return;
+        }
+        
         $this->autoWriteSubscription->cancel();
+        
+        foreach ($this->workerSessions as $workerSession) {
+            $this->unloadWorkerSession($workerSession);
+        }
+        
+        if ($this->autoTimeoutSubscription) {
+            $this->autoTimeoutSubscription->cancel();
+        }
     }
     
 }

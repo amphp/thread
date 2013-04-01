@@ -12,6 +12,8 @@ class WorkerService {
         $this->parser = $parser;
         $this->writer = $writer;
         $this->buffer = '';
+        
+        $parser->throwOnEof(FALSE);
     }
     
     function onReadable() {
@@ -24,20 +26,20 @@ class WorkerService {
                 return;
             }
             
-            $callId    = substr($this->buffer, 0, 4);
-            $procLen   = ord($this->buffer[4]);
+            $callId = substr($this->buffer, 0, 4);
+            $procLen = ord($this->buffer[4]);
             $procedure = substr($this->buffer, 5, $procLen);
-            $workload  = substr($this->buffer, $procLen + 5);
-            $workload  = unserialize($workload);
+            $workload = substr($this->buffer, $procLen + 5);
+            $workload = unserialize($workload);
             
             $this->buffer = '';
         
             try {
-                $rsv = 0b011;
+                $rsv = Dispatcher::CALL_RESULT;
                 $result = serialize(call_user_func_array($procedure, $workload));
             } catch (\Exception $e) {
-                $rsv = 0b111;
-                $result = $e->__toString();
+                $rsv = Dispatcher::CALL_ERROR;
+                $result = serialize($e->__toString());
             }
             
             $payload = $callId . $result;
