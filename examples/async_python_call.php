@@ -12,7 +12,6 @@ $workerCmd = '/usr/bin/python ' . dirname(__DIR__) . '/workers/python/demo.py';
 
 $reactor = (new ReactorFactory)->select();
 $dispatcher = new Dispatcher($reactor);
-$dispatcher->serializeWorkload(FALSE); // Non-PHP workers don't want PHP workload serialization!
 $dispatcher->start($poolSize = 4, $workerCmd);
 
 

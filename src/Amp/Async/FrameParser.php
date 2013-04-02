@@ -131,7 +131,7 @@ class FrameParser {
         }
         
         frame_complete: {
-            $frameArr = [$this->fin, $this->rsv, $this->opcode, $this->payload];
+            $frameArr = [$this->fin, $this->rsv, $this->opcode, $this->payload, $this->length];
             
             $this->state = self::START;
             

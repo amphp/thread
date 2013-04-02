@@ -90,6 +90,7 @@ register_shutdown_function(function() {
     fwrite(STDERR, $msg);
 });
 
+stream_set_blocking(STDIN, FALSE);
 
 $parser = new FrameParser(STDIN);
 $writer = new FrameWriter(STDOUT);

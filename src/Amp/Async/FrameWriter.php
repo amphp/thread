@@ -26,6 +26,19 @@ class FrameWriter {
         return ($this->bufferSize === '') ? TRUE : $this->doWrite();
     }
     
+    function writeAll($data = NULL) {
+        if ($data !== NULL) {
+            $this->buffer .= $data;
+            $this->bufferSize = strlen($this->buffer);
+        }
+        
+        if ($this->bufferSize !== '') {
+            while (!$this->doWrite()) {
+                $this->doWrite();
+            }
+        }
+    }
+    
     private function doWrite() {
         $allDataWritten = FALSE;
         $bytesWritten = @fwrite($this->outputStream, $this->buffer, $this->granularity);

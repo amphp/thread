@@ -9,7 +9,7 @@ date_default_timezone_set(ini_get('date.timezone') ?: 'UTC');
 require dirname(__DIR__) . '/autoload.php';
 
 $phpBinary    = PHP_BINARY;
-$workerScript = dirname(__DIR__) . '/workers/php/ampworker.php';
+$workerScript = dirname(__DIR__) . '/workers/php/worker.php';
 $userInclude  = __DIR__ . '/support_files/my_async_functions.php';
 $workerCmd    = $phpBinary . ' ' . $workerScript . ' ' . $userInclude;
 

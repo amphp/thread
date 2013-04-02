@@ -38,6 +38,15 @@ class CallResult {
     }
     
     /**
+     * Retrieve the Exception object responsible for call failure
+     * 
+     * @return Exception Returns the exception responsible for call failure
+     */
+    final function getError() {
+        return $this->error;
+    }
+    
+    /**
      * Was the invocation successful?
      * 
      * @return bool Returns TRUE for successful async invocation or FALSE for failure

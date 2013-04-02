@@ -6,47 +6,65 @@ class WorkerService {
     
     private $parser;
     private $writer;
-    private $buffer;
     
     function __construct(FrameParser $parser, FrameWriter $writer) {
         $this->parser = $parser;
         $this->writer = $writer;
-        $this->buffer = '';
         
         $parser->throwOnEof(FALSE);
     }
     
     function onReadable() {
         while ($frameArr = $this->parser->parse()) {
-            list($isFin, $rsv, $opcode, $payload) = $frameArr;
+            $payload = $frameArr[3];
             
-            $this->buffer .= $payload;
+            $callId = substr($payload, 0, 4);
+            $procLen = ord($payload[4]);
+            $procedure = substr($payload, 5, $procLen);
+            $workload = substr($payload, $procLen + 5);
             
-            if (!$isFin) {
-                return;
-            }
-            
-            $callId = substr($this->buffer, 0, 4);
-            $procLen = ord($this->buffer[4]);
-            $procedure = substr($this->buffer, 5, $procLen);
-            $workload = substr($this->buffer, $procLen + 5);
-            $workload = unserialize($workload);
-            
-            $this->buffer = '';
-        
             try {
-                $rsv = Dispatcher::CALL_RESULT;
-                $result = serialize(call_user_func_array($procedure, $workload));
+                $this->invokeProcedure($callId, $procedure, $workload);
+            } catch (ResourceException $e) {
+                throw $e;
             } catch (\Exception $e) {
-                $rsv = Dispatcher::CALL_ERROR;
-                $result = serialize($e->__toString());
+                $payload = $callId . $e->__toString();
+                $frame = new Frame($fin = 1, Dispatcher::CALL_ERROR, Frame::OP_DATA, $payload);
+                $this->send($frame);
+            }
+        }
+    }
+    
+    private function invokeProcedure($callId, $procedure, $workload) {
+        $result = $procedure($workload);
+        
+        if ($result instanceof \Iterator) {
+            $this->streamResult($callId, $result);
+        } elseif (!$result || is_scalar($result)) {
+            $payload = $callId . $result;
+            $frame = new Frame($fin = 1, Dispatcher::CALL_RESULT, Frame::OP_DATA, $payload);
+            $this->writer->writeAll($frame);
+        } else {
+            throw new \UnexpectedValueException(
+                'Invalid procedure return type: NULL, scalar or Iterator expected'
+            );
+        }
+    }
+    
+    private function streamResult($callId, \Iterator $result) {
+        while (TRUE) {
+            $chunk = $result->current();
+            $result->next();
+            $isFin = (int) !$result->valid();
+            
+            if (isset($chunk[0])) {
+                $chunk = $callId . $chunk;
+                $frame = new Frame($isFin, Dispatcher::CALL_RESULT, Frame::OP_DATA, $chunk);
+                $this->writer->writeAll($frame);
             }
             
-            $payload = $callId . $result;
-            $frame = new Frame($fin = 1, $rsv, $opcode = Frame::OP_DATA, $payload);
-            
-            if (!$this->writer->write($frame)) {
-                while (!$this->writer->write());
+            if ($isFin) {
+                break;
             }
         }
     }

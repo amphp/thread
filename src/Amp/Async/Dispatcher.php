@@ -38,7 +38,6 @@ class Dispatcher {
     private $readTimeout = 60;
     private $autoWriteInterval = 0.025;
     private $autoTimeoutInterval = 1;
-    private $serializeWorkload = TRUE;
     private $writeErrorsTo = STDERR;
     private $notifyOnPartialResult = FALSE;
     private $isStarted = FALSE;
@@ -58,10 +57,6 @@ class Dispatcher {
     
     function setGranularity($bytes) {
         $this->workerSessionFactory->setGranularity($bytes);
-    }
-    
-    function serializeWorkload($boolFlag) {
-        $this->serializeWorkload = filter_var($boolFlag, FILTER_VALIDATE_BOOLEAN);
     }
     
     function notifyOnPartialResult($boolFlag) {
@@ -123,11 +118,11 @@ class Dispatcher {
      * Asynchronously execute a procedure and handle the result using the $onResult callback
      * 
      * @param callable $onResult The callback to process the async execution's CallResult
-     * @param string $procedureName The function to execute asynchronously
-     * @param mixed $varArgs, ...
+     * @param string $procedure The function to execute asynchronously
+     * @param string $workload The data to pass as an argument to the procedure
      * @return string Returns the task's call ID
      */
-    function call(callable $onResult, $procedure, $varArgs = NULL) {
+    function call(callable $onResult, $procedure, $workload = NULL) {
         if (($callId = ++$this->lastCallId) == self::MAX_CALL_ID) {
             $this->lastCallId = 0;
         }
@@ -135,7 +130,7 @@ class Dispatcher {
         $callId = pack('N', $callId);
         
         $this->onResultCallbacks[$callId] = $onResult;
-        $this->partialResults[$callId] = NULL;
+        $this->partialResults[$callId] = '';
         
         if ($this->callTimeout) {
             $this->timeoutSchedule[$callId] = (time() + $this->callTimeout);
@@ -151,8 +146,8 @@ class Dispatcher {
         $this->workerCallMap[$workerId][$callId] = TRUE;
         $this->callWorkerMap[$callId] = $workerId;
         
+        // @TODO validate that procLen <= 253
         $procLen = chr(strlen($procedure));
-        $workload = $this->serializeWorkload ? serialize(array_slice(func_get_args(), 2)) : $varArgs;
         $payload = $callId . $procLen . $procedure . $workload;
         $callFrame = new Frame($fin = 1, $rsv = 1, $opcode = Frame::OP_DATA, $payload);
         
@@ -169,7 +164,7 @@ class Dispatcher {
         }
         
         try {
-            if ($frameArr = $workerSession->parse()) {
+            while ($frameArr = $workerSession->parse()) {
                 $this->receiveParsedFrame($workerSession, $frameArr);
             }
         } catch (ResourceException $e) {
@@ -199,27 +194,30 @@ class Dispatcher {
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
         
         $callId  = substr($payload, 0, 4);
+        
+        if (!isset($this->partialResults[$callId])) {
+            return;
+        }
+        
         $payload = substr($payload, 4);
         
         if (!$isFin && $this->notifyOnPartialResult) {
             // No RSV check is made here because error results should always set the FIN bit
-            $callResult = new CallResult($callId, $payload, $error = NULL, $isFin);
+            $callResult = new CallResult($callId, $payload, $error = NULL, 0);
             $callback = $this->onResultCallbacks[$callId];
             $callback($callResult);
             return;
-        } elseif (!$isFin) {
+        } elseif ($isFin) {
+            $payload = $this->partialResults[$callId] . $payload;
+        } else {
             $this->partialResults[$callId] .= $payload;
             return;
-        } else {
-            $payload = $this->partialResults[$callId] . $payload;
         }
         
-        $payload = $this->serializeWorkload ? unserialize($payload) : $payload;
-        
         if ($rsv & self::CALL_RESULT) {
-            $callResult = new CallResult($callId, $payload, $error = NULL, $isFin);
+            $callResult = new CallResult($callId, $payload, $error = NULL, 1);
         } elseif ($rsv & self::CALL_ERROR) {
-            $callResult = new CallResult($callId, $result = NULL, new WorkerException($payload), $isFin);
+            $callResult = new CallResult($callId, NULL, new WorkerException($payload), 1);
         } else {
             throw new \UnexpectedValueException(
                 'Unexpected data frame RSV value'
@@ -251,7 +249,7 @@ class Dispatcher {
         
         if (!empty($this->workerCallMap[$workerId])) {
             foreach ($this->workerCallMap[$workerId] as $callId => $placeholder) {
-                $callResult = new CallResult(NULL, $e);
+                $callResult = new CallResult($callId, NULL, $e);
                 $this->onResult($callId, $callResult);
             }
         }
@@ -290,7 +288,7 @@ class Dispatcher {
                 break;
             }
             
-            $callResult = new CallResult($result = NULL, new TimeoutException);
+            $callResult = new CallResult($callId, $result = NULL, new TimeoutException);
             $this->onResult($callId, $callResult);
         }
     }
