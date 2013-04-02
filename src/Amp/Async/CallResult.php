@@ -56,15 +56,6 @@ class CallResult {
     }
     
     /**
-     * Retrieve the exception instance that caused the call's failure
-     * 
-     * @return \Exception Returns an Exception instance or NULL if no error occured
-     */
-    final function getError() {
-        return $this->error;
-    }
-    
-    /**
      * Is more data coming before the call result is complete?
      * 
      * @return bool Returns TRUE if this is the last result chunk for this call, FALSE otherwise

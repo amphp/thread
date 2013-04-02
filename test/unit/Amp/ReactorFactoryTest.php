@@ -16,5 +16,18 @@ class ReactorFactoryTest extends PHPUnit_Framework_TestCase {
         $this->assertInstanceOf('Amp\\LibEventReactor', $reactor);
     }
     
+    /**
+     * @expectedException RuntimeException
+     */
+    function testSelectThrowsExceptionOnUnavailableEventLibrary() {
+        $rf = $this->getMock('Amp\\ReactorFactory', ['hasLibevent']);
+        
+        $rf->expects($this->once())
+           ->method('hasLibevent')
+           ->will($this->returnValue(FALSE));
+        
+        
+        $rf->select();
+    }
 }
 

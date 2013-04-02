@@ -29,7 +29,25 @@ class FrameTest extends PHPUnit_Framework_TestCase {
         $this->assertEquals(Frame::OP_CLOSE, $frame->getOpcode());
     }
     
-    
+    function testToString() {
+        $frame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload = 'test');
+        
+        $str = $frame->__toString();
+        
+        $this->assertEquals(4, ord($str[1]));
+        $this->assertEquals('test', substr($str, 2, 4));
+        
+        $payload = str_repeat('x', 300);
+        $frame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
+        $str = $frame->__toString();
+        $this->assertEquals(254, ord($str[1]));
+        
+        $payload = str_repeat('x', 70000);
+        $frame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
+        $str = $frame->__toString();
+        $this->assertEquals(255, ord($str[1]));
+        
+    }
     
 }
 

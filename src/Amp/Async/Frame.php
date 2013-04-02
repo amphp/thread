@@ -30,18 +30,6 @@ class Frame {
         return $this->rsv;
     }
     
-    function hasRsv1() {
-        return (bool) $this->rsv & 0b001;
-    }
-
-    function hasRsv2() {
-        return (bool) $this->rsv & 0b010;
-    }
-
-    function hasRsv3() {
-        return (bool) $this->rsv & 0b100;
-    }
-    
     function getOpcode() {
         return $this->opcode;
     }

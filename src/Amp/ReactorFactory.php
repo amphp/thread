@@ -14,7 +14,7 @@ class ReactorFactory {
             return new LibEventReactor;
         } else {
             throw new \RuntimeException(
-                'ext/libevent not available'
+                'libevent not available'
             );
         }
     }

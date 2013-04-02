@@ -4,13 +4,13 @@ namespace Amp\Async;
 
 class FrameWriter {
     
-    private $ouputStream;
+    private $outputStream;
     private $buffer = '';
     private $bufferSize = 0;
     private $granularity = 65536;
     
-    function __construct($ouputStream) {
-        $this->ouputStream = $ouputStream;
+    function __construct($outputStream) {
+        $this->outputStream = $outputStream;
     }
     
     function setGranularity($bytes) {
@@ -27,7 +27,8 @@ class FrameWriter {
     }
     
     private function doWrite() {
-        $bytesWritten = @fwrite($this->ouputStream, $this->buffer, $this->granularity);
+        $allDataWritten = FALSE;
+        $bytesWritten = @fwrite($this->outputStream, $this->buffer, $this->granularity);
         
         if ($bytesWritten === $this->bufferSize) {
             $this->buffer = '';
@@ -36,12 +37,9 @@ class FrameWriter {
         } elseif ($bytesWritten) {
             $this->buffer = substr($this->buffer, $bytesWritten);
             $this->bufferSize -= $bytesWritten;
-            $allDataWritten = FALSE;
-        } elseif (is_resource($this->ouputStream)) {
-            $allDataWritten = FALSE;
-        } else {
+        } elseif (!is_resource($this->outputStream)) {
             throw new ResourceException(
-                'Failed writing to ouput stream'
+                'Failed writing to output stream'
             );
         }
         

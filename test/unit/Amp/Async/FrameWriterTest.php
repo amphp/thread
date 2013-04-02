@@ -48,5 +48,16 @@ class FrameWriterTest extends PHPUnit_Framework_TestCase {
         $this->assertEquals($expected, $actual);
     }
     
+    /**
+     * @expectedException Amp\Async\ResourceException
+     */
+    function testWriteThrowsExceptionIfOutputStreamIsNotResource() {
+        $str = 'test';
+        
+        $outputStream = new StdClass;
+        $writer = new FrameWriter($outputStream);
+        $writer->write($str);
+    }
+    
 }
     
