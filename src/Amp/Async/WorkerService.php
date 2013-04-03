@@ -40,7 +40,7 @@ class WorkerService {
         
         if ($result instanceof \Iterator) {
             $this->streamResult($callId, $result);
-        } elseif (!$result || is_scalar($result)) {
+        } elseif ($result === NULL || is_scalar($result)) {
             $payload = $callId . $result;
             $frame = new Frame($fin = 1, Dispatcher::CALL_RESULT, Frame::OP_DATA, $payload);
             $this->writer->writeAll($frame);

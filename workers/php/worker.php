@@ -91,6 +91,7 @@ register_shutdown_function(function() {
 });
 
 stream_set_blocking(STDIN, FALSE);
+stream_set_blocking(STDOUT, FALSE);
 
 $parser = new FrameParser(STDIN);
 $writer = new FrameWriter(STDOUT);

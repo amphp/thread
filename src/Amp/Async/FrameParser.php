@@ -36,7 +36,14 @@ class FrameParser {
     }
     
     function parse() {
-        $this->buffer .= @fread($this->inputStream, $this->granularity);
+        while (TRUE) {
+            $data = @fread($this->inputStream, $this->granularity);
+            if ($data || $data === '0') {
+                $this->buffer .= $data;
+            } else {
+                break;
+            }
+        }
         
         if ($this->buffer || $this->buffer === '0') {
             switch ($this->state) {

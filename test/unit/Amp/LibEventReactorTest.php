@@ -117,5 +117,56 @@ class LibEventReactorTest extends PHPUnit_Framework_TestCase {
         $this->assertEquals(3, $counter);
     }
     
+    function testOnWritableSubscription() {
+        $this->skipIfMissingExtLibevent();
+        $reactor = new LibEventReactor;
+        
+        $flag = FALSE;
+        
+        $reactor->onWritable(STDOUT, function() use ($reactor, &$flag) {
+            $flag = TRUE;
+            $reactor->stop();
+        });
+        $reactor->once(function() use ($reactor) { $reactor->stop(); }, 0.05);
+        
+        $reactor->run();
+        $this->assertTrue($flag);
+    }
+    
+    /**
+     * @expectedException RuntimeException
+     */
+    function testDescriptorSubscriptionCallbackDoesntSwallowExceptions() {
+        $this->skipIfMissingExtLibevent();
+        $reactor = new LibEventReactor;
+        
+        $reactor->onWritable(STDOUT, function() { throw new RuntimeException; });
+        $reactor->once(function() use ($reactor) { $reactor->stop(); }, 0.05);
+        $reactor->run();
+    }
+    
+    function testGarbageCollection() {
+        $this->skipIfMissingExtLibevent();
+        
+        $reactor = new LibEventReactor();
+        $reactor->once(function() use ($reactor) { $reactor->stop(); }, 0.8);
+        $reactor->run();
+    }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

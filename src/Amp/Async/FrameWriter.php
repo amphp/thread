@@ -23,7 +23,7 @@ class FrameWriter {
             $this->bufferSize = strlen($this->buffer);
         }
         
-        return ($this->bufferSize === '') ? TRUE : $this->doWrite();
+        return $this->bufferSize ? $this->doWrite() : TRUE;
     }
     
     function writeAll($data = NULL) {
@@ -32,7 +32,7 @@ class FrameWriter {
             $this->bufferSize = strlen($this->buffer);
         }
         
-        if ($this->bufferSize !== '') {
+        if ($this->bufferSize) {
             while (!$this->doWrite()) {
                 $this->doWrite();
             }
