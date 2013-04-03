@@ -23,15 +23,15 @@ $dispatcher->start($poolSize = 4, $workerCmd);
 $afterSleep = function() use ($reactor) { $reactor->stop(); };
 
 // Asynchronously call `sleep(5)` and exit the event loop when it returns
-$reactor->once($delay = 0, function() use ($dispatcher, $afterSleep) {
+$reactor->once(function() use ($dispatcher, $afterSleep) {
     $dispatcher->call($afterSleep, 'sleep', 5);
 });
 
 
 // Output something every second to demonstrate that the sleep() call is asynchronous
-$reactor->repeat($interval = 1, function() {
+$reactor->repeat(function() {
     echo "tick ", time(), "\n";
-});
+}, $interval = 1);
 
 
 $onRot13Result = function(CallResult $result) {
@@ -39,7 +39,7 @@ $onRot13Result = function(CallResult $result) {
 };
 
 // Asynchronously call `str_rot13('my string')` as soon as the reactor starts (because we can)
-$reactor->once($delay = 0, function() use ($dispatcher, $onRot13Result) {
+$reactor->once(function() use ($dispatcher, $onRot13Result) {
     $dispatcher->call($onRot13Result, 'str_rot13', 'my string');
 });
 

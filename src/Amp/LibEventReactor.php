@@ -43,7 +43,7 @@ class LibEventReactor implements Reactor {
         event_base_loopexit($this->base);
     }
     
-    function once($delay, callable $callback) {
+    function once(callable $callback, $delay = 0) {
         $event = event_new();
         $delay = ($delay > 0) ? ($delay * $this->resolution) : 0;
         
@@ -68,11 +68,11 @@ class LibEventReactor implements Reactor {
         return $subscription;
     }
     
-    function repeat($interval, callable $callback, $iterations = 0) {
+    function repeat(callable $callback, $delay = 0, $iterations = 0) {
         $event = event_new();
-        $interval = ($interval > 0) ? ($interval * $this->resolution) : 0;
+        $delay = ($delay > 0) ? ($delay * $this->resolution) : 0;
         
-        $subscription = new LibEventSubscription($this, $event, $interval);
+        $subscription = new LibEventSubscription($this, $event, $delay);
         $this->subscriptions->attach($subscription, $event);
         
         $iterations = filter_var($iterations, FILTER_VALIDATE_INT, ['options' => [
@@ -84,12 +84,12 @@ class LibEventReactor implements Reactor {
             $this->repeatIterationMap->attach($subscription, $iterations);
         }
         
-        $wrapper = function() use ($callback, $event, $interval, $iterations, $subscription) {
+        $wrapper = function() use ($callback, $event, $delay, $iterations, $subscription) {
             try {
                 $callback();
                 
                 if (!$iterations || $this->canRepeat($subscription)) {
-                    event_add($event, $interval);
+                    event_add($event, $delay);
                 }
             } catch (\Exception $e) {
                 $this->stop();
@@ -99,7 +99,7 @@ class LibEventReactor implements Reactor {
         
         event_timer_set($event, $wrapper);
         event_base_set($event, $this->base);
-        event_add($event, $interval);
+        event_add($event, $delay);
         
         return $subscription;
     }

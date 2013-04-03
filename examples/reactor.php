@@ -20,9 +20,7 @@ $reactor->onReadable(STDIN, function($stdin, $trigger) {
 /**
  * Stop the program after 15 seconds
  */
-$reactor->once($stopAfter = 15, function() use ($reactor) {
-   $reactor->stop();
-});
+$reactor->once(function() use ($reactor) { $reactor->stop(); }, $delay = 15);
 
 echo "Each input line will be echoed back to you for the next 15 seconds ...\n\n";
 

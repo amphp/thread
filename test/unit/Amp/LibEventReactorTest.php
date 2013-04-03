@@ -18,7 +18,7 @@ class LibEventReactorTest extends PHPUnit_Framework_TestCase {
         
         $testIncrement = 0;
         
-        $reactor->once($delay = 0, function() use (&$testIncrement) {
+        $reactor->once(function() use (&$testIncrement) {
             $testIncrement++;
         });
         $reactor->tick();
@@ -32,13 +32,13 @@ class LibEventReactorTest extends PHPUnit_Framework_TestCase {
         
         $testIncrement = 0;
         
-        $reactor->repeat($delay = 0.001, function() use (&$testIncrement, $reactor) {
+        $reactor->repeat(function() use (&$testIncrement, $reactor) {
             if ($testIncrement < 10) {
                 $testIncrement++;
             } else {
                 $reactor->stop();
             }
-        });
+        }, $delay = 0.001);
         $reactor->run();
         
         $this->assertEquals(10, $testIncrement);
@@ -48,7 +48,7 @@ class LibEventReactorTest extends PHPUnit_Framework_TestCase {
         $this->skipIfMissingExtLibevent();
         $reactor = new LibEventReactor;
         
-        $subscription = $reactor->once($delay = 0, function(){});
+        $subscription = $reactor->once(function(){});
         
         $this->assertInstanceOf('Amp\\LibEventSubscription', $subscription);
     }
@@ -57,8 +57,8 @@ class LibEventReactorTest extends PHPUnit_Framework_TestCase {
         $this->skipIfMissingExtLibevent();
         $reactor = new LibEventReactor;
         
-        $reactor->repeat($delay = 1, function(){});
-        $reactor->once($delay = 0, function(){ throw new Exception('test'); });
+        $reactor->repeat(function(){}, $delay = 1);
+        $reactor->once(function(){ throw new Exception('test'); });
         
         try {
             $reactor->tick();
@@ -72,7 +72,7 @@ class LibEventReactorTest extends PHPUnit_Framework_TestCase {
         $this->skipIfMissingExtLibevent();
         $reactor = new LibEventReactor;
         
-        $subscription = $reactor->repeat($interval = 1, function(){});
+        $subscription = $reactor->repeat(function(){}, $interval = 1);
         
         $this->assertInstanceOf('Amp\\LibEventSubscription', $subscription);
     }
@@ -81,7 +81,7 @@ class LibEventReactorTest extends PHPUnit_Framework_TestCase {
         $this->skipIfMissingExtLibevent();
         $reactor = new LibEventReactor;
         
-        $reactor->repeat($interval = 0.001, function(){ throw new Exception('test'); });
+        $reactor->repeat(function(){ throw new Exception('test'); });
         
         try {
             $reactor->run();
@@ -95,12 +95,12 @@ class LibEventReactorTest extends PHPUnit_Framework_TestCase {
         $this->skipIfMissingExtLibevent();
         $reactor = new LibEventReactor;
         
-        $subscription = $reactor->once($delay = 0.001, function(){
+        $subscription = $reactor->once(function(){
             $this->fail('Subscription was not cancelled as expected');
-        });
+        }, $delay = 0.001);
         
-        $reactor->once($delay = 0, function() use ($subscription) { $subscription->cancel(); });
-        $reactor->once($delay = 0.002, function() use ($reactor) { $reactor->stop(); });
+        $reactor->once(function() use ($subscription) { $subscription->cancel(); });
+        $reactor->once(function() use ($reactor) { $reactor->stop(); }, $delay = 0.002);
         $reactor->run();
     }
     
@@ -110,8 +110,8 @@ class LibEventReactorTest extends PHPUnit_Framework_TestCase {
         
         $counter = 0;
         
-        $reactor->repeat($delay = 0, function() use (&$counter) { ++$counter; }, $iterations = 3);
-        $reactor->once($delay = 0.005, function() use ($reactor, $counter) { $reactor->stop(); });
+        $reactor->repeat(function() use (&$counter) { ++$counter; }, $delay = 0, $iterations = 3);
+        $reactor->once(function() use ($reactor, $counter) { $reactor->stop(); }, $delay = 0.005);
         
         $reactor->run();
         $this->assertEquals(3, $counter);

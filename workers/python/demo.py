@@ -19,9 +19,9 @@ def hello_world(arg = None):
 if __name__ == "__main__":
     
     callables = {
-        'len':          len,
-        'my_func':      my_func,
-        'hello_world':  hello_world
+        'len':          len,            # Native len() function
+        'my_func':      my_func,        # Custom function defined above
+        'hello_world':  hello_world     # Custom function defined above
     }
     
     ampy.listen(callables)

@@ -75,20 +75,20 @@ class Dispatcher {
             $this->spawnWorkerSession();
         }
         
-        $this->autoWriteSubscription = $this->reactor->repeat($this->autoWriteInterval, function() {
+        $this->autoWriteSubscription = $this->reactor->repeat(function() {
             foreach ($this->writableWorkers as $workerSession) {
                 if ($this->write($workerSession)) {
                     $this->writableWorkers->detach($workerSession);
                 }
             }
-        });
+        }, $this->autoWriteInterval);
         
         if ($this->callTimeout) {
-            $this->autoTimeoutSubscription = $this->reactor->repeat(1, function() {
+            $this->autoTimeoutSubscription = $this->reactor->repeat(function() {
                 if ($this->timeoutSchedule) {
                     $this->autoTimeout();
                 }
-            });
+            }, $this->autoTimeoutInterval);
         }
         
         return $this->isStarted = TRUE;

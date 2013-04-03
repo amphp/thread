@@ -34,7 +34,7 @@ $timeServer->listen(function($clientSock, $peerName, $serverName) {
 /**
  * Send a message to the console when we start the server
  */
-$reactor->once($delay = 0, function() use ($timeServer) {
+$reactor->once(function() use ($timeServer) {
     $addr = $timeServer->getAddress();
     $port = $timeServer->getPort();
     

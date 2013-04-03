@@ -11,8 +11,8 @@ interface Reactor {
     function tick();
     function run();
     function stop();
-    function once($delay, callable $callback);
-    function repeat($interval, callable $callback, $iterations = 0);
+    function once(callable $callback, $delay = 0);
+    function repeat(callable $callback, $delay = 0, $iterations = 0);
     function onReadable($ioStream, callable $callback, $timeout = -1);
     function onWritable($ioStream, callable $callback, $timeout = -1);
     function cancel(Subscription $subscription);

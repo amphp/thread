@@ -21,10 +21,10 @@ $onResult = function(CallResult $result) use ($reactor, &$count) {
 };
 
 // Stop the program after the reactor runs for 0.25 seconds
-$reactor->once(0.25, function() use ($reactor) { $reactor->stop(); });
+$reactor->once(function() use ($reactor) { $reactor->stop(); }, $delay = 0.25);
 
 // Call our hello_world function as many times as possible before the reactor is stopped
-$reactor->repeat($interval = 0, function() use ($dispatcher, $onResult) {
+$reactor->repeat(function() use ($dispatcher, $onResult) {
     $dispatcher->call($onResult, 'hello_world');
 });
 
