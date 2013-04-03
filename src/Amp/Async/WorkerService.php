@@ -30,7 +30,7 @@ class WorkerService {
             } catch (\Exception $e) {
                 $payload = $callId . $e->__toString();
                 $frame = new Frame($fin = 1, Dispatcher::CALL_ERROR, Frame::OP_DATA, $payload);
-                $this->send($frame);
+                $this->writer->writeAll($frame);
             }
         }
     }
