@@ -4,42 +4,48 @@ namespace Amp\Async;
 
 class Worker {
     
-    const WRITE_PIPE = 0;
-    const READ_PIPE  = 1;
-    const ERROR_PIPE = 2;
+    const STDIN  = 0;
+    const STDOUT = 1;
+    const STDERR = 2;
     
     private $process;
     private $pipes = [];
     private $descriptors = [
-        self::WRITE_PIPE => ["pipe", "r"],
-        self::READ_PIPE  => ["pipe", "w"],
-        self::ERROR_PIPE => NULL
+        self::STDIN  => ["pipe", "r"],
+        self::STDOUT => ["pipe", "w"],
+        self::STDERR => NULL
     ];
     
     function __construct($command, $errorStream = NULL, $cwd = NULL) {
-        $this->descriptors[self::ERROR_PIPE] = $errorStream ?: STDERR;
+        $this->descriptors[self::STDERR] = $errorStream ?: STDERR;
         $this->process = proc_open($command, $this->descriptors, $this->pipes, $cwd ?: getcwd());
         
+        // @codeCoverageIgnoreStart
         if (!is_resource($this->process)) {
             throw new \RuntimeException(
                 'Failed spawning AMP worker process'
             );
         }
+        // @codeCoverageIgnoreEnd
         
-        stream_set_blocking($this->pipes[self::WRITE_PIPE], FALSE);
-        stream_set_blocking($this->pipes[self::READ_PIPE],  FALSE);
+        stream_set_blocking($this->pipes[self::STDIN], FALSE);
+        stream_set_blocking($this->pipes[self::STDOUT], FALSE);
     }
     
     function getWritePipe() {
-        return $this->pipes[self::WRITE_PIPE];
+        return $this->pipes[self::STDIN];
     }
     
     function getReadPipe() {
-        return $this->pipes[self::READ_PIPE];
+        return $this->pipes[self::STDOUT];
     }
     
     function getPipes() {
         return $this->pipes;
+    }
+    
+    function getStatus() {
+        return proc_get_status($this->process);
     }
     
     function __destruct() {
