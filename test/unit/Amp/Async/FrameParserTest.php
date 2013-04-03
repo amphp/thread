@@ -15,6 +15,20 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
         
         $frames[] = [$frame];
         
+        // 1 -------------------------------------------------------------------------------------->
+        
+        $payload = str_repeat('.', 1024);
+        $frame = new Frame($fin=1, $rsv=0, $op=Frame::OP_DATA, $payload);
+        
+        $frames[] = [$frame];
+        
+        // 2 -------------------------------------------------------------------------------------->
+        
+        $payload = str_repeat('.', 70000);
+        $frame = new Frame($fin=1, $rsv=0, $op=Frame::OP_DATA, $payload);
+        
+        $frames[] = [$frame];
+        
         // x -------------------------------------------------------------------------------------->
         
         return $frames;
@@ -29,7 +43,10 @@ class FrameParserTest extends PHPUnit_Framework_TestCase {
         rewind($inputStream);
         
         $frameParser = new FrameParser($inputStream);
-        $frameArr = $frameParser->parse();
+        $frameParser->setGranularity(100);
+        while (!$frameArr = $frameParser->parse()) {
+            continue;
+        }
         
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
         
