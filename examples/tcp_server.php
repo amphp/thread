@@ -26,7 +26,7 @@ $timeServer->listen(function($clientSock, $peerName, $serverName) {
     
     // Client sockets accepted by the server are non-blocking by default. We turn blocking on
     // for this example to make our fwrite() operation atomic.
-    stream_set_blocking($clientSock, FALSE);
+    stream_set_blocking($clientSock, TRUE);
     fwrite($clientSock, $msg);
     fclose($clientSock);
 });
