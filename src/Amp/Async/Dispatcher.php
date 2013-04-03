@@ -63,6 +63,18 @@ class Dispatcher {
         $this->notifyOnPartialResult = filter_var($boolFlag, FILTER_VALIDATE_BOOLEAN);
     }
     
+    /**
+     * Populate the worker process pool
+     * 
+     * Repeated calls to start have no effect after the first invocation.
+     * 
+     * @param int $poolSize The number of worker processes to maintain in the pool
+     * @param string $cmd   The executable worker process command
+     * @param string $cwd   An optional current working directory for worker processes. If not
+     *                      specified workers will have the same cwd as the main process.
+     * 
+     * @return void
+     */
     function start($poolSize, $cmd, $cwd = NULL) {
         if ($this->isStarted) {
             return;
@@ -90,8 +102,6 @@ class Dispatcher {
                 }
             }, $this->autoTimeoutInterval);
         }
-        
-        return $this->isStarted = TRUE;
     }
     
     private function spawnWorkerSession() {
@@ -118,8 +128,9 @@ class Dispatcher {
      * Asynchronously execute a procedure and handle the result using the $onResult callback
      * 
      * @param callable $onResult The callback to process the async execution's CallResult
-     * @param string $procedure The function to execute asynchronously
-     * @param string $workload The data to pass as an argument to the procedure
+     * @param string $procedure  The function to execute asynchronously
+     * @param string $workload   The data to pass as an argument to the procedure
+     * 
      * @return string Returns the task's call ID
      */
     function call(callable $onResult, $procedure, $workload = NULL) {
@@ -159,16 +170,14 @@ class Dispatcher {
     }
     
     private function read(WorkerSession $workerSession, $triggeredBy) {
-        if ($triggeredBy === Reactor::TIMEOUT) {
-            return;
-        }
-        
-        try {
-            while ($frameArr = $workerSession->parse()) {
-                $this->receiveParsedFrame($workerSession, $frameArr);
+        if ($triggeredBy !== Reactor::TIMEOUT) {
+            try {
+                while ($frameArr = $workerSession->parse()) {
+                    $this->receiveParsedFrame($workerSession, $frameArr);
+                }
+            } catch (ResourceException $e) {
+                $this->handleBrokenProcessPipe($workerSession, $e);
             }
-        } catch (ResourceException $e) {
-            $this->handleBrokenProcessPipe($workerSession, $e);
         }
     }
     
