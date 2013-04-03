@@ -4,12 +4,11 @@ namespace Amp;
 
 class LibEventReactor implements Reactor {
     
-    const GC_INTERVAL = 1;
-    
     private $base;
     private $subscriptions;
     private $repeatIterationMap;
     private $resolution = 1000000;
+    private $gcInterval = 0.75;
     private $garbage = [];
     
     function __construct() {
@@ -23,12 +22,12 @@ class LibEventReactor implements Reactor {
         $garbageEvent = event_new();
         event_timer_set($garbageEvent, [$this, 'collectGarbage'], $garbageEvent);
         event_base_set($garbageEvent, $this->base);
-        event_add($garbageEvent, self::GC_INTERVAL * $this->resolution);
+        event_add($garbageEvent, $this->gcInterval * $this->resolution);
     }
     
     private function collectGarbage($nullFd, $flags, $garbageEvent) {
         $this->garbage = [];
-        event_add($garbageEvent, self::GC_INTERVAL * $this->resolution);
+        event_add($garbageEvent, $this->gcInterval * $this->resolution);
     }
     
     function tick() {
