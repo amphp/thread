@@ -25,6 +25,12 @@ class CallResultTest extends PHPUnit_Framework_TestCase {
         $cr->getResult();
     }
     
+    function testGetError() {
+        $callId = pack('N', 55555555);
+        $cr = new CallResult($callId, $result = NULL, $error = new Exception);
+        $this->assertEquals($error, $cr->getError());
+    }
+    
     function testIsSuccess() {
         $callId = pack('N', 55555555);
         $cr = new CallResult($callId, $result = 'test', $error = NULL, $isComplete = FALSE);

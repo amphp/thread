@@ -48,6 +48,17 @@ class FrameWriterTest extends PHPUnit_Framework_TestCase {
         $this->assertEquals($expected, $actual);
     }
     
+    function testWriteAll() {
+        $outputStream = fopen('php://memory', 'r+');
+        $writer = new FrameWriter($outputStream);
+        $writer->setGranularity(1);
+        
+        $data = str_repeat('x', 1024);
+        $writer->writeAll($data);
+        rewind($outputStream);
+        $this->assertEquals($data, stream_get_contents($outputStream));
+    }
+    
     /**
      * @expectedException Amp\Async\ResourceException
      */
