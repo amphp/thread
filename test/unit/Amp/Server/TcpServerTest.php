@@ -1,8 +1,17 @@
 <?php
 
-use Amp\Server\TcpServer;
+use Amp\Server\TcpServer,
+    Amp\ReactorFactory;
 
 class TcpServerTest extends PHPUnit_Framework_TestCase {
+    
+    private function skipIfMissingExtLibevent() {
+        if (!extension_loaded('libevent')) {
+            $this->markTestSkipped(
+                'libevent extension not available'
+            );
+        }
+    }
     
     /**
      * @expectedException InvalidArgumentException
@@ -63,6 +72,58 @@ class TcpServerTest extends PHPUnit_Framework_TestCase {
         $server = new TcpServer($reactor, $address, $port);
         
         $this->assertEquals($port, $server->getPort());
+    }
+    
+    function testListenThrowsExceptionIfAlreadyListening() {
+        $this->skipIfMissingExtLibevent();
+        
+        $reactor = (new ReactorFactory)->select();
+        $address = '127.0.0.1';
+        $port = 1337;
+        
+        $server = new TcpServer($reactor, $address, $port);
+        $server->listen(function(){});
+        
+        try {
+            $server->listen(function(){});
+            $this->fail('Expected exception not thrown');
+        } catch (RuntimeException $e) {
+            $server->stop();
+        }
+    }
+    
+    function testListenThrowsExceptionOnBindFailure() {
+        $this->skipIfMissingExtLibevent();
+        
+        $reactor = (new ReactorFactory)->select();
+        $address = '127.0.0.1';
+        $port = 1337;
+        
+        $server = new TcpServer($reactor, $address, $port);
+        $server->listen(function(){});
+        
+        $server2 = new TcpServer($reactor, $address, $port);
+        
+        try {
+            $server2->listen(function(){});
+            $this->fail('Expected exception not thrown');
+        } catch (RuntimeException $e) {
+            $server->stop();
+        }
+    }
+    
+    function testEnableDisable() {
+        $this->skipIfMissingExtLibevent();
+        
+        $reactor = (new ReactorFactory)->select();
+        $address = '127.0.0.1';
+        $port = 1337;
+        
+        $server = new TcpServer($reactor, $address, $port);
+        $server->listen(function(){});
+        $server->disable();
+        $server->enable();
+        $server->stop();
     }
     
 }

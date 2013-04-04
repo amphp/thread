@@ -65,7 +65,7 @@ class TcpServer {
         $bindOn = 'tcp://' . $this->address . ':' . $this->port;
         $flags = STREAM_SERVER_BIND | STREAM_SERVER_LISTEN;
         
-        if ($socket = stream_socket_server($bindOn, $errNo, $errStr, $flags)) {
+        if ($socket = @stream_socket_server($bindOn, $errNo, $errStr, $flags)) {
             stream_set_blocking($socket, FALSE);
             $this->socket = $socket;
             $this->acceptSubscription = $this->reactor->onReadable($socket, function($socket) use ($onClient) {

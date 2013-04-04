@@ -6,8 +6,6 @@ use Amp\Reactor;
 
 class Dispatcher {
     
-    const MAX_CALL_ID = 2147483647;
-    
     const CALL        = 1;
     const CALL_RESULT = 2;
     const CALL_ERROR  = 3;
@@ -26,18 +24,18 @@ class Dispatcher {
     private $timeoutSchedule = [];
     private $onResultCallbacks = [];
     private $partialResults = [];
-    
     private $writableWorkers;
     
     private $workerCmd;
     private $workerCwd;
     
     private $lastCallId = 0;
+    private $maxCallId = 2147483647;
     private $pendingCalls = 0;
     private $callTimeout = 30;
     private $readTimeout = 60;
     private $autoWriteInterval = 0.025;
-    private $autoTimeoutInterval = 1;
+    private $timeoutCheckInterval = 1;
     private $writeErrorsTo = STDERR;
     private $notifyOnPartialResult = FALSE;
     private $isStarted = FALSE;
@@ -49,9 +47,24 @@ class Dispatcher {
     }
     
     function setCallTimeout($seconds) {
-        $this->callTimeout = filter_var($seconds, FILTER_VALIDATE_INT, ['options' => [
+        $this->callTimeout = filter_var($seconds, FILTER_VALIDATE_FLOAT, ['options' => [
             'min_range' => 0,
             'default' => 30
+        ]]);
+    }
+    
+    function setTimeoutCheckInterval($seconds) {
+        $this->timeoutCheckInterval = filter_var($seconds, FILTER_VALIDATE_FLOAT, ['options' => [
+            'min_range' => 0.1,
+            'default' => 1
+        ]]);
+    }
+    
+    function setMaxCallId($seconds) {
+        $this->maxCallId = filter_var($seconds, FILTER_VALIDATE_INT, ['options' => [
+            'min_range' => 1,
+            'max_range' => 2147483647,
+            'default' => 2147483647
         ]]);
     }
     
@@ -97,11 +110,11 @@ class Dispatcher {
         
         if ($this->callTimeout) {
             $this->autoTimeoutSubscription = $this->reactor->repeat(function() {
-                if ($this->timeoutSchedule) {
-                    $this->autoTimeout();
-                }
-            }, $this->autoTimeoutInterval);
+                $this->autoTimeout();
+            }, $this->timeoutCheckInterval);
         }
+        
+        $this->isStarted = TRUE;
     }
     
     private function spawnWorkerSession() {
@@ -134,7 +147,7 @@ class Dispatcher {
      * @return string Returns the task's call ID
      */
     function call(callable $onResult, $procedure, $workload = NULL) {
-        if (($callId = ++$this->lastCallId) == self::MAX_CALL_ID) {
+        if (($callId = ++$this->lastCallId) == $this->maxCallId) {
             $this->lastCallId = 0;
         }
         
@@ -187,10 +200,6 @@ class Dispatcher {
         switch($opcode) {
             case Frame::OP_DATA:
                 $this->receiveDataFrame($frameArr);
-                break;
-            case Frame::OP_CLOSE:
-                $this->unloadWorkerSession($workerSession);
-                $this->spawnWorkerSession();
                 break;
             default:
                 throw new \UnexpectedValueException(
@@ -290,6 +299,10 @@ class Dispatcher {
     }
     
     private function autoTimeout() {
+        if (!$this->timeoutSchedule) {
+            return;
+        }
+        
         $now = time();
         
         foreach ($this->timeoutSchedule as $callId => $cutoffTime) {

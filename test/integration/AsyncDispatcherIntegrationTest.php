@@ -20,7 +20,6 @@ class AsyncDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
         $workerScript = dirname(dirname(__DIR__)) . '/workers/php/worker.php';
         $workerCmd    = $phpBinary . ' ' . $workerScript;
         
-        
         $reactor = (new ReactorFactory)->select();
         $dispatcher = new Dispatcher($reactor);
         $dispatcher->setCallTimeout(1);
@@ -67,5 +66,57 @@ class AsyncDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
         $reactor->run();
     }
     
+    function testTimedOutCallResult() {
+        
+        $phpBinary    = PHP_BINARY;
+        $workerScript = dirname(dirname(__DIR__)) . '/workers/php/worker.php';
+        $workerCmd    = $phpBinary . ' ' . $workerScript;
+        
+        $reactor = (new ReactorFactory)->select();
+        $dispatcher = new Dispatcher($reactor);
+        $dispatcher->setTimeoutCheckInterval(0.1);
+        $dispatcher->setCallTimeout(0.5);
+        $dispatcher->setMaxCallId(1);
+        $dispatcher->start($poolSize = 1, $workerCmd);
+        
+        $onResult = function(CallResult $callResult) use ($reactor) {
+            $this->assertTrue($callResult->isError());
+            $this->assertInstanceOf('Amp\Async\TimeoutException', $callResult->getError());
+            $reactor->stop();
+        };
+        
+        $reactor->once(function() use ($dispatcher, $onResult) {
+            $dispatcher->call($onResult, 'sleep', 1);
+        }, $delay = 0.25);
+        
+        $reactor->run();
+        
+        $dispatcher->__destruct();
+    }
+    
     
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
