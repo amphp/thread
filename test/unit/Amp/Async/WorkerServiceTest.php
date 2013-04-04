@@ -17,8 +17,8 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         $workload = str_repeat('.', $len);
         $procedure = 'strlen';
         $procLen = chr(strlen($procedure));
-        $payload = $callId . $procLen . $procedure . $workload;
-        $callFrame = new Frame($fin = 1, $rsv = 1, $opcode = Frame::OP_DATA, $payload);
+        $payload = $callId . chr(Dispatcher::CALL) . $procLen . $procedure . $workload;
+        $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
         
         $inputStream = fopen('php://memory', 'r+');
         fwrite($inputStream, $callFrame);
@@ -38,7 +38,8 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
         
         $this->assertEquals($callId, substr($payload, 0, 4));
-        $this->assertEquals($len, substr($payload, 4));
+        $this->assertEquals($len, substr($payload, 5));
+        $this->assertEquals(ord($payload[4]), Dispatcher::CALL_RESULT);
     }
     
     function testOnReadableWithStreamingMultiFrameResult() {
@@ -47,8 +48,8 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         
         $procedure = 'streamWorkerResultFunc';
         $procLen = chr(strlen($procedure));
-        $payload = $callId . $procLen . $procedure;
-        $callFrame = new Frame($fin = 1, $rsv = 1, $opcode = Frame::OP_DATA, $payload);
+        $payload = $callId . chr(Dispatcher::CALL) . $procLen . $procedure;
+        $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
         
         $inputStream = fopen('php://memory', 'r+');
         fwrite($inputStream, $callFrame);
@@ -69,19 +70,20 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
         $this->assertEquals($isFin, 0);
         $this->assertEquals($callId, substr($payload, 0, 4));
-        $this->assertEquals('chunk1', substr($payload, 4));
+        $this->assertEquals('chunk1', substr($payload, 5));
         
         $frameArr = $endParser->parse();
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
         $this->assertEquals($isFin, 0);
         $this->assertEquals($callId, substr($payload, 0, 4));
-        $this->assertEquals('chunk2', substr($payload, 4));
+        $this->assertEquals('chunk2', substr($payload, 5));
         
         $frameArr = $endParser->parse();
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
         $this->assertEquals($isFin, 1);
         $this->assertEquals($callId, substr($payload, 0, 4));
-        $this->assertEquals('chunk3', substr($payload, 4));
+        $this->assertEquals('chunk3', substr($payload, 5));
+        $this->assertEquals(ord($payload[4]), Dispatcher::CALL_RESULT);
     }
     
     function testOnReadableReturnsCallErrorOnInvalidProcedureReturnType() {
@@ -90,8 +92,8 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         
         $procedure = 'invalidReturnTestFunc';
         $procLen = chr(strlen($procedure));
-        $payload = $callId . $procLen . $procedure;
-        $callFrame = new Frame($fin = 1, $rsv = 1, $opcode = Frame::OP_DATA, $payload);
+        $payload = $callId . chr(Dispatcher::CALL) . $procLen . $procedure;
+        $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
         
         $inputStream = fopen('php://memory', 'r+');
         fwrite($inputStream, $callFrame);
@@ -111,7 +113,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
         
         $this->assertEquals($callId, substr($payload, 0, 4));
-        $this->assertTrue((bool) ($rsv & Dispatcher::CALL_ERROR));
+        $this->assertEquals(ord($payload[4]), Dispatcher::CALL_ERROR);
     }
     
     /**
@@ -123,8 +125,8 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         $procedure = 'strlen';
         $workload = 'test';
         $procLen = chr(strlen($procedure));
-        $payload = $callId . $procLen . $procedure . $workload;
-        $callFrame = new Frame($fin = 1, $rsv = 1, $opcode = Frame::OP_DATA, $payload);
+        $payload = $callId . chr(Dispatcher::CALL) . $procLen . $procedure . $workload;
+        $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
         
         $inputStream = fopen('php://memory', 'r+');
         fwrite($inputStream, $callFrame);
