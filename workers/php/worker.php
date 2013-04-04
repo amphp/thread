@@ -49,7 +49,6 @@ set_error_handler(function($errNo, $errStr, $errFile, $errLine) {
         $msg = "[$errType]: $errStr in $errFile on line $errLine" . PHP_EOL;
         
         fwrite(STDERR, $msg);
-        exit(1);
     }
 });
 
@@ -59,7 +58,6 @@ set_error_handler(function($errNo, $errStr, $errFile, $errLine) {
  */
 set_exception_handler(function($e) {
     fwrite(STDERR, $e);
-    exit(1);
 });
 
 

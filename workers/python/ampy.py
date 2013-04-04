@@ -114,27 +114,28 @@ def listen(callables):
         if not frame.is_fin():
             continue
         
-        packedCallId = payload[0:4]
+        call_id = payload[0:4]
+        call_code = ord(payload[4])
         
-        procLen   = ord(payload[4]) + 5
-        procedure = payload[5:procLen]
-        workload  = payload[procLen:]
+        proc_len   = ord(payload[5]) + 6
+        procedure = payload[6:proc_len]
+        workload  = payload[proc_len:]
         payload   = ""
         
         try:
             func = callables[procedure]
             
             if callable(func):
-                rsv = CALL_RESULT
+                call_code = chr(CALL_RESULT)
                 result = str(func(workload))
             else:
                 raise Exception("Procedure `%s` not implemented" % procedure)
             
         except Exception as e:
-            rsv = CALL_ERROR
+            call_code = chr(CALL_ERROR)
             result = str(e)
         
-        frame = Frame(1, rsv, OP_DATA, packedCallId + result)
+        frame = Frame(1, 0, OP_DATA, call_id + call_code + result)
         stdout.write(frame.get_raw_frame())
         stdout.flush()
 

@@ -39,11 +39,13 @@ class Dispatcher {
     private $writeErrorsTo = STDERR;
     private $notifyOnPartialResult = FALSE;
     private $isStarted = FALSE;
+    private $chrCallCode;
     
     function __construct(Reactor $reactor, WorkerSessionFactory $wsf = NULL) {
         $this->reactor = $reactor;
         $this->workerSessionFactory = $wsf ?: new WorkerSessionFactory;
         $this->writableWorkers = new \SplObjectStorage;
+        $this->chrCallCode = chr(self::CALL);
     }
     
     function setCallTimeout($seconds) {
@@ -170,10 +172,10 @@ class Dispatcher {
         $this->workerCallMap[$workerId][$callId] = TRUE;
         $this->callWorkerMap[$callId] = $workerId;
         
-        // @TODO validate that procLen <= 253
+        // @TODO validate that procLen <= 255
         $procLen = chr(strlen($procedure));
-        $payload = $callId . $procLen . $procedure . $workload;
-        $callFrame = new Frame($fin = 1, $rsv = 1, $opcode = Frame::OP_DATA, $payload);
+        $payload = $callId . $this->chrCallCode . $procLen . $procedure . $workload;
+        $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
         
         if (!$this->write($workerSession, $callFrame)) {
             $this->writableWorkers->attach($workerSession);
@@ -195,32 +197,19 @@ class Dispatcher {
     }
     
     private function receiveParsedFrame(WorkerSession $workerSession, array $frameArr) {
-        $opcode = $frameArr[2];
-        
-        switch($opcode) {
-            case Frame::OP_DATA:
-                $this->receiveDataFrame($frameArr);
-                break;
-            default:
-                throw new \UnexpectedValueException(
-                    'Unexpected frame OPCODE: ' . $opcode
-                );
-        }
-    }
-    
-    private function receiveDataFrame(array $frameArr) {
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
         
-        $callId  = substr($payload, 0, 4);
+        $callId = substr($payload, 0, 4);
         
         if (!isset($this->partialResults[$callId])) {
             return;
         }
         
-        $payload = substr($payload, 4);
+        $callCode = ord($payload[4]);
+        $payload = substr($payload, 5);
         
         if (!$isFin && $this->notifyOnPartialResult) {
-            // No RSV check is made here because error results should always set the FIN bit
+            // No callCode check is made here because error results should always set the FIN bit
             $callResult = new CallResult($callId, $payload, $error = NULL, 0);
             $callback = $this->onResultCallbacks[$callId];
             $callback($callResult);
@@ -232,9 +221,9 @@ class Dispatcher {
             return;
         }
         
-        if ($rsv & self::CALL_RESULT) {
+        if ($callCode == self::CALL_RESULT) {
             $callResult = new CallResult($callId, $payload, $error = NULL, 1);
-        } elseif ($rsv & self::CALL_ERROR) {
+        } elseif ($callCode == self::CALL_ERROR) {
             $callResult = new CallResult($callId, NULL, new WorkerException($payload), 1);
         } else {
             throw new \UnexpectedValueException(
