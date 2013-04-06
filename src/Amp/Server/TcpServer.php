@@ -6,6 +6,8 @@ use Amp\Reactor;
 
 class TcpServer {
     
+    const IPV4_WILDCARD_ADDRESS = '*';
+    
     protected $reactor;
     protected $address;
     protected $port;
@@ -21,15 +23,15 @@ class TcpServer {
     }
     
     protected function setAddress($address) {
-        $address = trim($address, '[]');
-        
-        if (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        if ($address == self::IPV4_WILDCARD_ADDRESS) {
+            $this->address = '0.0.0.0';
+        } elseif (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
             $this->address = $address;
-        } elseif (filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        } elseif (filter_var(trim($address, '[]'), FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
             $this->address = '[' . $address . ']';
         } else {
             throw new \InvalidArgumentException(
-                'Invalid server address'
+                'Invalid server address specified: ' . $address
             );
         }
     }
@@ -82,9 +84,8 @@ class TcpServer {
     }
     
     protected function accept($socket, callable $onClient) {
-        $serverName = stream_socket_get_name($socket, FALSE);
-        
         while ($clientSock = @stream_socket_accept($socket, 0, $peerName)) {
+            $serverName = stream_socket_get_name($clientSock, FALSE);
             $onClient($clientSock, $peerName, $serverName);
         }
     }

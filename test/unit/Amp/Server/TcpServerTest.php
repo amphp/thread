@@ -126,5 +126,15 @@ class TcpServerTest extends PHPUnit_Framework_TestCase {
         $server->stop();
     }
     
+    function testWildcardAddressResolvesToZeros() {
+        $reactor = (new ReactorFactory)->select();
+        $address = '*';
+        $port = 1337;
+        
+        $server = new TcpServer($reactor, $address, $port);
+        
+        $this->assertEquals('0.0.0.0', $server->getAddress()); 
+    }
+    
 }
 
