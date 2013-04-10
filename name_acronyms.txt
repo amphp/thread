@@ -1,5 +1,0 @@
-AMP - Async Messaging Platform
-AMP - Aerys Messaging Protocol
-AMP - Async My PHP
-AMP - AMP Messaging Platform (a recursive acronym, like PHP!)
-AMP - Asynchronous Multiplex PHP
