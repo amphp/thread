@@ -21,14 +21,14 @@ $timeServer = new TcpServer($reactor, '127.0.0.1', 1337);
  * Bind the server to the address::port we specified in the constructor and tell it how to respond
  * when a new client connects.
  */
-$timeServer->listen(function($clientSock, $peerName, $serverName) {
+$timeServer->listen(function($clientSocket) {
     $msg = 'The time is ' . date('Y-m-d H:i:s') . "\n";
     
     // Client sockets accepted by the server are non-blocking by default. We turn blocking on
     // for this example to make our fwrite() operation atomic.
-    stream_set_blocking($clientSock, TRUE);
-    fwrite($clientSock, $msg);
-    fclose($clientSock);
+    stream_set_blocking($clientSocket, TRUE);
+    fwrite($clientSocket, $msg);
+    fclose($clientSocket);
 });
 
 /**

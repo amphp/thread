@@ -41,7 +41,7 @@ class TcpServerIntegrationTest extends PHPUnit_Framework_TestCase {
             });
         });
         
-        $server->listen(function($client, $peerName, $serverName) {
+        $server->listen(function($client) {
             $data = 42;
             $dataLen = strlen($data);
             while ($dataLen) {

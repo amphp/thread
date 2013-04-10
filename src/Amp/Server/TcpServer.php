@@ -84,9 +84,8 @@ class TcpServer {
     }
     
     protected function accept($socket, callable $onClient) {
-        while ($clientSock = @stream_socket_accept($socket, 0, $peerName)) {
-            $serverName = stream_socket_get_name($clientSock, FALSE);
-            $onClient($clientSock, $peerName, $serverName);
+        while ($clientSock = @stream_socket_accept($socket, $timeout = 0)) {
+            $onClient($clientSock);
         }
     }
     

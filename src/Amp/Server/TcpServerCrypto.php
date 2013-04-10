@@ -108,15 +108,13 @@ class TcpServerCrypto extends TcpServer {
      * Overrides parent::accept() to enable TLS encryption before accepting the new client.
      */
     protected function accept($socket, callable $onClient) {
-        $serverName = stream_socket_get_name($socket, FALSE);
-        
-        while ($clientSock = @stream_socket_accept($socket, 0, $peerName)) {
+        while ($clientSock = @stream_socket_accept($socket, $timeout = 0)) {
             $onReadable = $this->reactor->onReadable($clientSock, function ($clientSock, $trigger) {
                 $this->doHandshake($clientSock, $trigger);
             }, $this->handshakeTimeout);
             
             $clientId = (int) $clientSock;
-            $this->clientsPendingHandshake[$clientId] = [$onReadable, $peerName, $serverName, $onClient];
+            $this->clientsPendingHandshake[$clientId] = [$onReadable, $onClient];
             $this->doHandshake($clientSock, NULL);
         }
     }
@@ -131,12 +129,12 @@ class TcpServerCrypto extends TcpServer {
         } elseif ($cryptoResult = @stream_socket_enable_crypto($clientSock, TRUE, $this->cryptoType)) {
             $clientId = (int) $clientSock;
             $pendingInfo = $this->clientsPendingHandshake[$clientId];
-            list($onReadable, $peerName, $serverName, $onClient) = $pendingInfo;
+            list($onReadable, $onClient) = $pendingInfo;
             
             $onReadable->cancel();
             unset($this->clientsPendingHandshake[$clientId]);
             
-            $onClient($clientSock, $peerName, $serverName);
+            $onClient($clientSock);
         } elseif (FALSE === $cryptoResult) {
             $this->failConnectionAttempt($clientSock);
         }

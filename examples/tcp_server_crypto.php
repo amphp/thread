@@ -34,7 +34,7 @@ $encryptedServer = (new TcpServerCrypto($reactor, '127.0.0.1', 1443))->setAllOpt
  * Bind the server to the address::port we specified in the constructor and tell it how to respond
  * when a new client connects.
  */
-$encryptedServer->listen(function($clientSock, $peerName, $serverName) {
+$encryptedServer->listen(function($clientSocket) {
     // read and write from the connected client socket
 });
 
