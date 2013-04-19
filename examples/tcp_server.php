@@ -1,7 +1,8 @@
 <?php
 
 use Amp\ReactorFactory,
-    Amp\Server\TcpServer;
+    Amp\TcpServer,
+    Amp\Connection;
 
 date_default_timezone_set(ini_get('date.timezone') ?: 'UTC');
 
@@ -15,32 +16,27 @@ $reactor = (new ReactorFactory)->select();
 /**
  * Instantiate the server
  */
-$timeServer = new TcpServer($reactor, '127.0.0.1', 1337);
+$timeServer = new TcpServer($reactor, '127.0.0.1:1337');
 
 /**
  * Bind the server to the address::port we specified in the constructor and tell it how to respond
  * when a new client connects.
  */
-$timeServer->listen(function($clientSocket) {
-    $msg = 'The time is ' . date('Y-m-d H:i:s') . "\n";
+$timeServer->listen(function(Connection $conn) {
+    $msg = "\n--- The time is " . date('Y-m-d H:i:s') . " ---\n\n";
     
-    // Client sockets accepted by the server are non-blocking by default. We turn blocking on
-    // for this example to make our fwrite() operation atomic.
-    stream_set_blocking($clientSocket, TRUE);
-    fwrite($clientSocket, $msg);
-    fclose($clientSocket);
+    if (!$conn->send($msg)) {
+        while (!$conn->send());
+    }
+    
+    $conn->close();
 });
 
 /**
  * Send a message to the console when we start the server
  */
 $reactor->once(function() use ($timeServer) {
-    $addr = $timeServer->getAddress();
-    $port = $timeServer->getPort();
-    
-    echo "Time server started on {$addr}:{$port}", "\n";
-    echo "To retrieve the current time, telnet in like so:", "\n\n";
-    echo "\t$ telnet {$addr} {$port}", "\n\n";
+    echo "Time server started ...\n";
 });
 
 
