@@ -109,7 +109,7 @@ class TcpServer {
     }
     
     private function generateTlsContext($tls) {
-        $tls = array_filter(function($value) { return isset($value); }, $tls);
+        $tls = array_filter($tls, function($value) { return isset($value); });
         $tls = array_merge($this->tlsDefaults, $tls);
         $this->validateTlsArray($tls);
         
