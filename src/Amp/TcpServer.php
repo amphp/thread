@@ -2,21 +2,16 @@
 
 namespace Amp;
 
-class TcpServer {
+abstract class TcpServer {
     
-    const IPV4_WILDCARD_ADDRESS = '*';
+    const IPV4_WILDCARD = '*';
     
-    private $reactor;
-    private $servers = [];
-    private $addresses = [];
-    private $tlsContexts = [];
-    private $acceptCallbacks = [];
-    private $acceptSubscriptions = [];
-    private $tlsClientsPendingHandshake = [];
-    private $cachedConnectionCount = 0;
-    private $isBound = FALSE;
-    
-    private $tlsDefaults = [
+    protected $reactor;
+    protected $address = [];
+    protected $servers = [];
+    protected $addressTlsContextMap = [];
+    protected $pendingTlsClients = [];
+    protected $tlsDefaults = [
         'local_cert'          => NULL,
         'passphrase'          => NULL,
         'allow_self_signed'   => TRUE,
@@ -26,31 +21,19 @@ class TcpServer {
         'cafile'              => NULL,
         'capath'              => NULL
     ];
+    protected $tlsHandshakeTimeout = 3;
+    protected $cryptoType = STREAM_CRYPTO_METHOD_TLS_SERVER;
+    protected $acceptSubscriptions = [];
+    protected $isStarted = FALSE;
+    protected $isPaused = FALSE;
     
-    private $maxConnections = 1000;
-    private $cryptoType = STREAM_CRYPTO_METHOD_TLS_SERVER;
-    private $handshakeTimeout = 3;
-    
-    function __construct(Reactor $reactor, $nameOrArray) {
+    function __construct(Reactor $reactor) {
         $this->reactor = $reactor;
-        
-        if (is_string($nameOrArray)) {
-            $this->setListenOptions($nameOrArray, $tls = NULL);
-        } elseif ($nameOrArray && is_array($nameOrArray)) {
-            foreach ($nameOrArray as $nameAndTlsArr) {
-                $name = array_shift($nameAndTlsArr);
-                $tls = array_shift($nameAndTlsArr);
-                $this->setListenOptions($name, $tls);
-            }
-            $this->servers = array_unique($this->servers);
-        } else {
-            throw new \InvalidArgumentException(
-                'Invalid server name(s) specified at '.__CLASS__.'::'.__METHOD__.' Argument 2'
-            );
-        }
     }
     
-    private function setListenOptions($name, array $tls = NULL) {
+    abstract protected function onClient($clientSock);
+    
+    function defineBinding($name, array $tls = []) {
         list($addr, $port) = $this->parseName($name);
         
         $addr = $this->validateAddr($addr);
@@ -58,27 +41,29 @@ class TcpServer {
         
         $address = 'tcp://' . $addr . ':' . $port;
         
-        $this->addresses[] = $address;
-        $this->tlsContexts[$address] = $tls ? $this->generateTlsContext($tls) : NULL;
+        $this->address[] = $address;
+        $this->addressTlsContextMap[$address] = $tls ? $this->generateTlsContext($tls) : NULL;
+        
+        return $this;
     }
     
-    private function parseName($name) {
+    protected function parseName($name) {
         if ($portStartPos = strrpos($name, ':')) {
             $addr = substr($name, 0, $portStartPos);
             $port = substr($name, $portStartPos + 1);
         } else {
             throw new \InvalidArgumentException(
-                'Invalid server name; names must match the form IP:PORT'
+                'Invalid server name; names must match the IP:PORT format'
             );
         }
         
         return [$addr, $port];
     }
     
-    private function validateAddr($addr) {
+    protected function validateAddr($addr) {
         $addr = trim($addr, '[]');
         
-        if ($addr == self::IPV4_WILDCARD_ADDRESS) {
+        if ($addr == self::IPV4_WILDCARD) {
             $validatedAddr = '0.0.0.0';
         } elseif (filter_var($addr, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
             $validatedAddr = $addr;
@@ -93,7 +78,7 @@ class TcpServer {
         return $validatedAddr;
     }
     
-    private function validatePort($port) {
+    protected function validatePort($port) {
         $validatedPort = filter_var($port, FILTER_VALIDATE_INT, ['options' => [
             'max_range' => 65535,
             'min_range' => 0
@@ -108,7 +93,7 @@ class TcpServer {
         return $validatedPort;
     }
     
-    private function generateTlsContext($tls) {
+    protected function generateTlsContext($tls) {
         $tls = array_filter($tls, function($value) { return isset($value); });
         $tls = array_merge($this->tlsDefaults, $tls);
         $this->validateTlsArray($tls);
@@ -116,164 +101,130 @@ class TcpServer {
         return stream_context_create(['ssl' => $tls]);
     }
     
-    private function validateTlsArray($tls) {
+    protected function validateTlsArray($tls) {
         if (empty($tls['local_cert'])) {
             throw new \UnexpectedValueException(
-                'The `local_cert` option must be specified before binding a crypto-enabled server'
+                '`local_cert` TLS setting required to bind crypto-enabled server'
             );
         } elseif (empty($tls['passphrase'])) {
             throw new \UnexpectedValueException(
-                'The `passphrase` option must be specified before binding a crypto-enabled server'
+                '`passphrase` TLS setting required to bind crypto-enabled server'
             );
         }
     }
     
-    function listen(callable $onClient) {
-        if (!$this->isBound) {
-            foreach ($this->addresses as $bindTo) {
-                $this->bindServer($bindTo, $onClient);
+    function start() {
+        if (!$this->isStarted) {
+            foreach ($this->address as $address) {
+                $this->bindServer($address);
             }
-            $this->isBound = TRUE;
-        } else {
-            throw new \RuntimeException(
-                "Server socket(s) already bound and listening"
-            );
+            $this->isStarted = TRUE;
+            $this->reactor->run();
         }
-        
-        return $this;
     }
     
-    private function bindServer($bindTo, $onClient) {
+    protected function bindServer($address) {
         $flags = STREAM_SERVER_BIND | STREAM_SERVER_LISTEN;
         
-        if (isset($this->tlsContexts[$bindTo])) {
-            $context = $this->tlsContexts[$bindTo];
-            $isTls = TRUE;
+        if ($this->addressTlsContextMap[$address]) {
+            $context = $this->tlsContexts[$address];
+            $acceptFunc = function($server) { $this->acceptTls($server); };
         } else {
             $context = stream_context_create();
-            $isTls = FALSE;
+            $acceptFunc = function($server) { $this->accept($server); };
         }
         
-        if ($server = @stream_socket_server($bindTo, $errNo, $errStr, $flags, $context)) {
+        if ($server = @stream_socket_server($address, $errNo, $errStr, $flags, $context)) {
             stream_set_blocking($server, FALSE);
             $serverId = (int) $server;
-            
-            $acceptFunc = $isTls
-                ? function() use ($server) { $this->acceptTls($server); }
-                : function() use ($server) { $this->accept($server); };
-            
             $this->servers[$serverId] = $server;
-            $this->acceptCallbacks[$serverId] = $onClient;
             $this->acceptSubscriptions[$serverId] = $this->reactor->onReadable($server, $acceptFunc);
         } else {
             throw new \RuntimeException(
-                "Failed binding server to $bindTo: [Error# $errNo] $errStr"
+                "Failed binding server to $address: [Error# $errNo] $errStr"
             );
         }
     }
     
-    private function accept($server) {
-        $serverId = (int) $server;
-        $onClient = $this->acceptCallbacks[$serverId];
-        
+    protected function accept($server) {
         while ($clientSock = @stream_socket_accept($server, $timeout = 0)) {
-            $connection = $this->generateConnectionFromClientSocket($clientSock);
-            
-            $onClient($connection);
-            
-            if (++$this->cachedConnectionCount >= $this->maxConnections) {
-                $this->disable();
-                break;
-            }
+            $this->onClient($clientSock);
         }
     }
     
-    private function generateConnectionFromClientSocket($clientSock) {
-        $connection = new Connection($clientSock);
-        $connection->subscribe([
-            'DONE' => function() use ($connection) { $this->close($connection); }
-        ]);
-        
-        return $connection;
-    }
-    
-    private function acceptTls($server) {
+    protected function acceptTls($server) {
         $serverId = (int) $server;
-        $onClient = $this->acceptCallbacks[$serverId];
         
         while ($clientSock = @stream_socket_accept($server, $timeout = 0)) {
-            $handshakeSub = $this->reactor->onReadable($clientSock, function ($clientSock, $trigger) {
-                $this->doTlsHandshake($clientSock, $trigger);
-            }, $this->handshakeTimeout);
-            
             $clientId = (int) $clientSock;
-            $this->tlsClientsPendingHandshake[$clientId] = [$handshakeSub, $onClient];
+            $this->pendingTlsClients[$clientId] = NULL;
             
-            $this->cachedConnectionCount++;
-            
-            $this->doTlsHandshake($clientSock, NULL);
-            
-            if ($this->cachedConnectionCount >= $this->maxConnections) {
-                $this->disable();
-                break;
+            if (!$this->doTlsHandshake($clientSock, $trigger = NULL)) {
+                $handshakeSub = $this->reactor->onReadable($clientSock, function ($clientSock, $trigger) {
+                    $this->doTlsHandshake($clientSock, $trigger);
+                }, $this->tlsHandshakeTimeout);
+                
+                $this->pendingTlsClients[$clientId] = $handshakeSub;
             }
         }
     }
     
-    private function doTlsHandshake($clientSock, $trigger) {
+    protected function doTlsHandshake($clientSock, $trigger) {
         if ($trigger === Reactor::TIMEOUT) {
             $this->failTlsConnection($clientSock);
+            $result = FALSE;
         } elseif ($cryptoResult = stream_socket_enable_crypto($clientSock, TRUE, $this->cryptoType)) {
-            $clientId = (int) $clientSock;
-            list($handshakeSub, $onClient) = $this->tlsClientsPendingHandshake[$clientId];
-            unset($this->tlsClientsPendingHandshake[$clientId]);
-            $handshakeSub->cancel();
-            $connection = $this->generateConnectionFromClientSocket($clientSock);
-            $onClient($connection);
+            $this->clearPendingClient($clientSock);
+            $this->onClient($clientSock);
+            $result = TRUE;
         } elseif (FALSE === $cryptoResult) {
-            // Note that the strict `FALSE ===` check is required here because a falsy zero integer
-            // value is returned when the handshake is still pending.
             $this->failTlsConnection($clientSock);
+            $result = FALSE;
+        } else {
+            $result = FALSE;
+        }
+        
+        return $result;
+    }
+    
+    protected function failTlsConnection($clientSock) {
+        $this->clearPendingClient($clientSock);
+        if (is_resource($clientSock)) {
+            @fclose($clientSock);
         }
     }
     
-    private function failTlsConnection($clientSock) {
+    protected function clearPendingClient($clientSock) {
         $clientId = (int) $clientSock;
-        $handshakeSub = $this->tlsClientsPendingHandshake[$clientId][0];
-        $handshakeSub->cancel();
-        
-        unset($this->tlsClientsPendingHandshake[$clientId]);
-        
-        @fclose($clientSock);
-        
-        $this->cachedConnectionCount--;
-    }
-    
-    private function close(Connection $connection) {
-        if ($this->cachedConnectionCount-- === $this->maxConnections) {
-            $this->enable();
+        if ($handshakeSub = $this->pendingTlsClients[$clientId]) {
+            $handshakeSub->cancel();
         }
+        unset($this->pendingTlsClients[$clientId]);
     }
     
     /**
      * Temporarily stop accepting new connections but do not unbind the socket servers
      */
-    function disable() {
-        if ($this->isBound) {
+    function pause() {
+        if ($this->isStarted && !$this->isPaused) {
             foreach ($this->acceptSubscriptions as $subscription) {
                 $subscription->disable();
             }
+            
+            $this->isPaused = TRUE;
         }
     }
     
     /**
      * Resume accepting new connections on the bound socket servers
      */
-    function enable() {
-        if ($this->isBound) {
+    function resume() {
+        if ($this->isStarted && $this->isPaused) {
             foreach ($this->acceptSubscriptions as $subscription) {
                 $subscription->enable();
             }
+            
+            $this->isPaused = FALSE;
         }
     }
     
@@ -281,15 +232,15 @@ class TcpServer {
      * Stop accepting client connections and unbind the socket servers
      */
     function stop() {
-        if ($this->isBound) {
+        if ($this->isStarted) {
             $this->clearAcceptSubscriptions();
-            $this->clearAcceptCallbacks();
             $this->stopServers();
-            $this->isBound = FALSE;
+            $this->isStarted = FALSE;
+            $this->isPaused = FALSE;
         }
     }
     
-    private function clearAcceptSubscriptions() {
+    protected function clearAcceptSubscriptions() {
         foreach ($this->acceptSubscriptions as $subscription) {
             $subscription->cancel();
         }
@@ -297,11 +248,7 @@ class TcpServer {
         $this->acceptSubscriptions = [];
     }
     
-    private function clearAcceptCallbacks() {
-        $this->acceptCallbacks = [];
-    }
-    
-    private function stopServers() {
+    protected function stopServers() {
         foreach ($this->servers as $socket) {
             if (is_resource($socket)) {
                 @fclose($socket);
@@ -309,13 +256,6 @@ class TcpServer {
         }
         
         $this->servers = [];
-    }
-    
-    function setMaxConnections($connCount) {
-        $this->maxConnections = filter_var($connCount, FILTER_VALIDATE_INT, ['options' => [
-            'min_range' => 0,
-            'default' => 1000
-        ]]);
     }
     
 }

@@ -17,11 +17,11 @@ class TcpServerIntegrationTest extends PHPUnit_Framework_TestCase {
         $this->skipIfMissingExtLibevent();
         
         $reactor = (new ReactorFactory)->select();
-        $server = new TcpServer($reactor, '127.0.0.1:1337');
+        $server = (new IntegrationTcpServerTestStub($reactor))->defineBinding('127.0.0.1:1337');
         
         $reactor->once(function() {
             throw new Exception('TCP server integration test timed out');
-        }, $delay = 2);
+        }, $delay = 1);
         
         $reactor->once(function() use ($reactor, $server) {
             $connectTo = '127.0.0.1:1337';
@@ -36,19 +36,19 @@ class TcpServerIntegrationTest extends PHPUnit_Framework_TestCase {
             });
         });
         
-        $server->listen(function($conn) {
-            $client = $conn->getSocket();
-            $data = 42;
-            $dataLen = strlen($data);
-            while ($dataLen) {
-                $bytesWritten = fwrite($client, $data);
-                $dataLen -= $bytesWritten;
-            }
-            $conn->close();
-        });
-        
-        $reactor->run();
+        $server->start();
     }
     
 }
 
+class IntegrationTcpServerTestStub extends TcpServer {
+    protected function onClient($socket) {
+        $data = 42;
+        $dataLen = strlen($data);
+        while ($dataLen) {
+            $bytesWritten = fwrite($socket, $data);
+            $dataLen -= $bytesWritten;
+        }
+        fclose($socket);
+    }
+}
