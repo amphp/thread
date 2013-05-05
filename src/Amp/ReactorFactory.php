@@ -4,6 +4,10 @@ namespace Amp;
 
 class ReactorFactory {
     
+    function __invoke() {
+        return $this->select();
+    }
+    
     /**
      * @TODO Select best available event base for the current system. Right now the only one that
      *       exists is the LibEventReactor. At the very least add a reactor utilizing the native
