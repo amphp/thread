@@ -41,8 +41,8 @@ class Dispatcher {
     private $isStarted = FALSE;
     private $chrCallCode;
     
-    function __construct(Reactor $reactor, WorkerSessionFactory $wsf = NULL) {
-        $this->reactor = $reactor;
+    function __construct(Reactor $reactor = NULL, WorkerSessionFactory $wsf = NULL) {
+        $this->reactor = $reactor ?: (new ReactorFactory)->select();
         $this->workerSessionFactory = $wsf ?: new WorkerSessionFactory;
         $this->writableWorkers = new \SplObjectStorage;
         $this->chrCallCode = chr(self::CALL);
