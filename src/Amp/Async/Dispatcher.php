@@ -2,7 +2,8 @@
 
 namespace Amp\Async;
 
-use Amp\Reactor;
+use Amp\Reactor,
+    Amp\ReactorFactory;
 
 class Dispatcher {
     
