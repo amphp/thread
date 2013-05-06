@@ -173,7 +173,7 @@ abstract class TcpServer {
         if ($trigger === Reactor::TIMEOUT) {
             $this->failTlsConnection($clientSock);
             $result = FALSE;
-        } elseif ($cryptoResult = stream_socket_enable_crypto($clientSock, TRUE, $this->cryptoType)) {
+        } elseif ($cryptoResult = @stream_socket_enable_crypto($clientSock, TRUE, $this->cryptoType)) {
             $this->clearPendingClient($clientSock);
             $this->onClient($clientSock);
             $result = TRUE;
