@@ -1,4 +1,4 @@
 Amp
 ===
 
-A reactor + async invocation framework for event-driven PHP servers and applications
+An event reactor + asynchronous concurrency framework for event-driven PHP applications.
