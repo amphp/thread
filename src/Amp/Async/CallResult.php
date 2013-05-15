@@ -4,14 +4,14 @@ namespace Amp\Async;
 
 class CallResult {
     
+    private $callId;
     private $result;
     private $error;
     
-    final function __construct($callId, $result, \Exception $error = NULL, $isComplete = TRUE) {
+    final function __construct($callId, $result, \Exception $error = NULL) {
         $this->callId = $callId;
         $this->result = $result;
         $this->error = $error;
-        $this->isComplete = $isComplete;
     }
     
     /**
@@ -26,11 +26,11 @@ class CallResult {
     /**
      * Retrieve the async invocation result
      * 
-     * @throws \Exception if the call resulted in an error
+     * @throws CallException if the call resulted in an error
      * @return mixed Returns the result of the asynchronously invoked procedure
      */
     final function getResult() {
-        if (!$this->error) {
+        if ($this->error === NULL) {
             return $this->result;
         } else {
             throw $this->error;
@@ -40,7 +40,7 @@ class CallResult {
     /**
      * Retrieve the Exception object responsible for call failure
      * 
-     * @return Exception Returns the exception responsible for call failure
+     * @return string Returns the error message explaining the call's failure
      */
     final function getError() {
         return $this->error;
@@ -52,25 +52,16 @@ class CallResult {
      * @return bool Returns TRUE for successful async invocation or FALSE for failure
      */
     final function isSuccess() {
-        return !$this->error;
+        return ($this->error === NULL);
     }
     
     /**
      * Did the invocation fail?
      * 
-     * @return bool Returns TRUE for invocation failure or FALSE otherwise
+     * @return bool Returns TRUE if the call failed, FALSE otherwise
      */
     final function isError() {
         return (bool) $this->error;
-    }
-    
-    /**
-     * Is more data coming before the call result is complete?
-     * 
-     * @return bool Returns TRUE if this is the last result chunk for this call, FALSE otherwise
-     */
-    final function isComplete() {
-        return $this->isComplete;
     }
 }
 

@@ -1,13 +1,13 @@
 <?php
 
 use Amp\ReactorFactory,
-    Amp\Async\Dispatcher,
+    Amp\Async\PhpDispatcher,
     Amp\Async\CallResult,
     Amp\Async\ResourceException,
     Amp\Async\WorkerSession,
     Amp\Async\WorkerSessionFactory;
 
-class AsyncDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
+class PhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
     private function skipIfMissingExtLibevent() {
         if (!extension_loaded('libevent')) {
@@ -19,18 +19,16 @@ class AsyncDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
     function testNativeFunctionDispatch() {
         
-        $phpBinary    = PHP_BINARY;
-        $workerScript = dirname(dirname(__DIR__)) . '/workers/php/worker.php';
-        $workerCmd    = $phpBinary . ' ' . $workerScript;
+        $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
         
         $reactor = (new ReactorFactory)->select();
-        $dispatcher = new Dispatcher($reactor);
+        $dispatcher = new PhpDispatcher($reactor, $functions);
         $dispatcher->setCallTimeout(1);
         $dispatcher->setGranularity(1);
-        $dispatcher->start($poolSize = 1, $workerCmd);
+        $dispatcher->start();
         
         // cover repeated start
-        $dispatcher->start($poolSize = 1, $workerCmd);
+        $dispatcher->start();
         
         $onResult = function(CallResult $callResult) use ($reactor) {
             $this->assertEquals(4, $callResult->getResult());
@@ -46,16 +44,12 @@ class AsyncDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
     function testCustomFunctionDispatch() {
         
-        $phpBinary    = PHP_BINARY;
-        $workerScript = dirname(dirname(__DIR__)) . '/workers/php/worker.php';
-        $userInclude  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
-        $workerCmd    = $phpBinary . ' ' . $workerScript . ' ' . $userInclude;
+        $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
         
         $reactor = (new ReactorFactory)->select();
-        $dispatcher = new Dispatcher($reactor);
-        $dispatcher->setCallTimeout(1);
+        $dispatcher = new PhpDispatcher($reactor, $functions);
         $dispatcher->setGranularity(1);
-        $dispatcher->start($poolSize = 1, $workerCmd);
+        $dispatcher->start();
         
         $onResult = function(CallResult $callResult) use ($reactor) {
             $this->assertEquals('woot', $callResult->getResult());
@@ -71,16 +65,12 @@ class AsyncDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
     function testTimedOutCallResult() {
         
-        $phpBinary    = PHP_BINARY;
-        $workerScript = dirname(dirname(__DIR__)) . '/workers/php/worker.php';
-        $workerCmd    = $phpBinary . ' ' . $workerScript;
+        $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
         
         $reactor = (new ReactorFactory)->select();
-        $dispatcher = new Dispatcher($reactor);
-        $dispatcher->setTimeoutCheckInterval(0.1);
-        $dispatcher->setCallTimeout(0.5);
-        $dispatcher->setMaxCallId(1);
-        $dispatcher->start($poolSize = 1, $workerCmd);
+        $dispatcher = new PhpDispatcher($reactor, $functions);
+        $dispatcher->setCallTimeout(1);
+        $dispatcher->start();
         
         $onResult = function(CallResult $callResult) use ($reactor) {
             $this->assertTrue($callResult->isError());
@@ -89,7 +79,7 @@ class AsyncDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
         };
         
         $reactor->once(function() use ($dispatcher, $onResult) {
-            $dispatcher->call($onResult, 'sleep', 1);
+            $dispatcher->call($onResult, 'sleep', 5);
         }, $delay = 0.25);
         
         $reactor->run();
@@ -104,14 +94,11 @@ class AsyncDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
      * should result in a CALL_ERROR result.
      */
     function testBrokenPipeOnRead() {
-        $phpBinary    = PHP_BINARY;
-        $workerScript = dirname(dirname(__DIR__)) . '/workers/php/worker.php';
-        $userInclude  = dirname(__DIR__) . '/fixture/dispatch_die_on_second_invocation.php';
-        $workerCmd    = $phpBinary . ' ' . $workerScript . ' ' . $userInclude;
+        $functions  = dirname(__DIR__) . '/fixture/dispatch_die_on_second_invocation.php';
         
         $reactor = (new ReactorFactory)->select();
-        $dispatcher = new Dispatcher($reactor);
-        $dispatcher->start($poolSize = 1, $workerCmd);
+        $dispatcher = new PhpDispatcher($reactor, $functions);
+        $dispatcher->start();
         
         $count = 0;
         $onResult = function(CallResult $callResult) use ($reactor, &$count) {
@@ -131,14 +118,11 @@ class AsyncDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     }
     
     function testErrorReturnOnUncaughtWorkerFunctionException() {
-        $phpBinary    = PHP_BINARY;
-        $workerScript = dirname(dirname(__DIR__)) . '/workers/php/worker.php';
-        $userInclude  = dirname(__DIR__) . '/fixture/dispatch_call_error_function.php';
-        $workerCmd    = $phpBinary . ' ' . $workerScript . ' ' . $userInclude;
+        $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
         
         $reactor = (new ReactorFactory)->select();
-        $dispatcher = new Dispatcher($reactor);
-        $dispatcher->start($poolSize = 1, $workerCmd);
+        $dispatcher = new PhpDispatcher($reactor, $functions);
+        $dispatcher->start();
         
         $onResult = function(CallResult $callResult) use ($reactor) {
             $this->assertTrue($callResult->isError());
@@ -155,23 +139,4 @@ class AsyncDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
     
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
