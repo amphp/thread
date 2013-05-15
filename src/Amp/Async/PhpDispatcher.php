@@ -75,7 +75,7 @@ class PhpDispatcher extends Dispatcher {
         
         $serializedArgs = serialize($args);
         
-        parent::call($onResult, $procedure, $serializedArgs);
+        return parent::call($onResult, $procedure, $serializedArgs);
     }
     
 }
