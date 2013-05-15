@@ -11,6 +11,7 @@ class Dispatcher {
     const CALL_RESULT = 2;
     const CALL_ERROR  = 3;
     const MAX_PROCEDURE_LENGTH = 255;
+    const MAX_CALL_ID = 2147483647;
     
     private $reactor;
     private $workerSessionFactory;
@@ -139,7 +140,7 @@ class Dispatcher {
             throw new \InvalidArgumentException;
         }
         
-        if (($callId = ++$this->lastCallId) == PHP_INT_MAX) {
+        if (($callId = ++$this->lastCallId) == self::MAX_CALL_ID) {
             $this->lastCallId = 0;
         }
         
