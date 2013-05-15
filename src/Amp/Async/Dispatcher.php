@@ -23,6 +23,7 @@ class Dispatcher {
     private $workerSubscriptions = [];
     private $workerCallMap = [];
     private $callWorkerMap = [];
+    private $callFrames = [];
     private $availableWorkers = [];
     private $timeoutSchedule = [];
     private $onResultCallbacks = [];
@@ -69,7 +70,7 @@ class Dispatcher {
     }
     
     /**
-     * Populate the worker process pool
+     * Hydrate the worker process pool
      * 
      * Repeated calls to start have no effect after the first invocation.
      * 
@@ -120,14 +121,13 @@ class Dispatcher {
         );
         
         $workerId = spl_object_hash($workerSession);
-        
         $this->workerSessions[$workerId] = $workerSession;
         $this->pendingCallCounts[$workerId] = 0;
         $this->workerSubscriptions[$workerId] = $readSubscription;
     }
     
     /**
-     * Asynchronously execute a procedure passing the result to the $onResult callback
+     * Asynchronously execute a procedure and invoke the $onResult callback when complete
      * 
      * @param callable $onResult The callback to process the async execution's CallResult
      * @param string $procedure  The function to execute asynchronously
@@ -138,6 +138,11 @@ class Dispatcher {
     function call(callable $onResult, $procedure, $workload = NULL) {
         if (!is_string($procedure)) {
             throw new \InvalidArgumentException;
+        } elseif (($procLen = strlen($procedure)) > self::MAX_PROCEDURE_LENGTH) {
+            throw new \RangeException(
+                'Procedure name exceeds maximum allowable length (' .
+                self::MAX_PROCEDURE_LENGTH . '): ' . $procedure
+            );
         }
         
         if (($callId = ++$this->lastCallId) == self::MAX_CALL_ID) {
@@ -153,30 +158,27 @@ class Dispatcher {
             $this->timeoutSchedule[$callId] = (time() + $this->callTimeout);
         }
         
+        $payload = $callId . $this->chrCallCode . chr($procLen) . $procedure . $workload;
+        $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
+        
+        $this->allocateCall($callId, $callFrame);
+        
+        return $callId;
+    }
+    
+    private function allocateCall($callId, Frame $callFrame) {
         asort($this->pendingCallCounts);
         $workerId = key($this->pendingCallCounts);
         $workerSession = $this->workerSessions[$workerId];
         
-        $this->pendingCalls++;
         $this->pendingCallCounts[$workerId]++;
         $this->workerCallMap[$workerId][$callId] = TRUE;
         $this->callWorkerMap[$callId] = $workerId;
-        
-        if (($procLen = strlen($procedure)) > self::MAX_PROCEDURE_LENGTH) {
-            throw new \RangeException(
-                'Procedure name exceeds maximum allowable length (' .
-                self::MAX_PROCEDURE_LENGTH . '): ' . $procedure
-            );
-        }
-        
-        $payload = $callId . $this->chrCallCode . chr($procLen) . $procedure . $workload;
-        $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
+        $this->callFrames[$callId] = $callFrame;
         
         if (!$this->write($workerSession, $callFrame)) {
             $this->writableWorkers->attach($workerSession);
         }
-        
-        return $callId;
     }
     
     private function read(WorkerSession $workerSession, $triggeredBy) {
@@ -220,11 +222,9 @@ class Dispatcher {
             );
         }
         
-        $this->onResult($callId, $callResult);
-    }
-    
-    private function onResult($callId, $callResult) {
         $callback = $this->onResultCallbacks[$callId];
+        $callback($callResult);
+        
         $workerId = $this->callWorkerMap[$callId];
         
         // The isset check exists to avoid erroneously resetting the call count after a broken
@@ -238,31 +238,64 @@ class Dispatcher {
             $this->onResultCallbacks[$callId],
             $this->partialResults[$callId],
             $this->callWorkerMap[$callId],
+            $this->callFrames[$callId],
             $this->workerCallMap[$workerId][$callId]
         );
-        
-        $callback($callResult);
+    }
+    
+    private function write(WorkerSession $workerSession, $callFrame = NULL) {
+        try {
+            return $workerSession->write($callFrame);
+        } catch (ResourceException $e) {
+            $this->handleBrokenProcessPipe($workerSession, $e);
+        }
     }
     
     private function handleBrokenProcessPipe(WorkerSession $workerSession, \Exception $e) {
         $workerId = spl_object_hash($workerSession);
+        $fatalCallId = key($this->workerCallMap[$workerId]);
+        $cancellations = [$fatalCallId => $workerId];
+        $this->cancelCalls($cancellations, $e);
+    }
+    
+    private function cancelCalls(array $callIdWorkerIdMap, \Exception $cancellationError) {
+        $workerIdsToKill = array_unique($callIdWorkerIdMap);
+        $cancelCallIds = array_keys($callIdWorkerIdMap);
+        $cancellationCallbacks = [];
+        $callsToReallocate = [];
+        $workerSessionsToKill = [];
         
-        $results = [];
-        if (!empty($this->workerCallMap[$workerId])) {
-            foreach ($this->workerCallMap[$workerId] as $callId => $placeholder) {
-                $results[$callId] = $this->callResultFactory->make($callId, NULL, $e);
+        foreach ($workerIdsToKill as $workerId) {
+            if ($this->workerCallMap[$workerId]) {
+                $workerCalls = array_keys($this->workerCallMap[$workerId]);
+                $callsToReallocate = array_merge($callsToReallocate, $workerCalls);
             }
+            $workerSessionsToKill[] = $this->workerSessions[$workerId];
         }
-            
-        $this->unloadWorkerSession($workerSession);
-        $this->spawnWorkerSession();
         
-        /**
-         * It's important to wait on notifying user callbacks of the errors until AFTER the worker
-         * has been respawned in case they resubmit a job when no workers are available.
-         */
-        foreach ($results as $callId => $callResult) {
-            $this->onResult($callId, $callResult);
+        $callsToReallocate = array_diff($callsToReallocate, $cancelCallIds);
+        
+        foreach ($cancelCallIds as $callId) {
+            $cancellationCallbacks[$callId] = $this->onResultCallbacks[$callId];
+        }
+        
+        $callFramesForReallocation = [];
+        foreach ($callsToReallocate as $callId) {
+            $callFramesForReallocation[$callId] = $this->callFrames[$callId];
+        }
+        
+        foreach ($workerSessionsToKill as $workerSession) {
+            $this->unloadWorkerSession($workerSession);
+            $this->spawnWorkerSession();
+        }
+        
+        foreach ($callFramesForReallocation as $callId => $callFrame) {
+            $this->allocateCall($callId, $callFrame);
+        }
+        
+        foreach ($cancellationCallbacks as $callId => $callback) {
+            $callResult = $this->callResultFactory->make($callId, $result = NULL, $cancellationError);
+            $callback($callResult);
         }
     }
     
@@ -280,28 +313,24 @@ class Dispatcher {
         );
     }
     
-    private function write(WorkerSession $workerSession, $callFrame = NULL) {
-        try {
-            return $workerSession->write($callFrame);
-        } catch (ResourceException $e) {
-            $this->handleBrokenProcessPipe($workerSession, $e);
-        }
-    }
-    
     private function autoTimeout() {
         if (!$this->timeoutSchedule) {
             return;
         }
         
         $now = time();
+        $expirations = [];
         
         foreach ($this->timeoutSchedule as $callId => $cutoffTime) {
             if ($now < $cutoffTime) {
                 break;
+            } else {
+                $expirations[$callId] = $this->callWorkerMap[$callId];
             }
-            
-            $callResult = $this->callResultFactory->make($callId, $result = NULL, new TimeoutException);
-            $this->onResult($callId, $callResult);
+        }
+        
+        if ($expirations) {
+            $this->cancelCalls($expirations, new TimeoutException);
         }
     }
     

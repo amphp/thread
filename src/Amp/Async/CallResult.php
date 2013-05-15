@@ -61,7 +61,7 @@ class CallResult {
      * @return bool Returns TRUE if the call failed, FALSE otherwise
      */
     final function isError() {
-        return ($this->error !== NULL);
+        return (bool) $this->error;
     }
 }
 
