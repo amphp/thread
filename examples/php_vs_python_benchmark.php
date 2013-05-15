@@ -55,7 +55,7 @@ $reactor->once(function() use ($reactor) {
 }, $delayInSeconds = RUN_TIME);
 
 $reactor->repeat(function() use ($phpDispatcher, $phpOnResult) {
-    $phpDispatcher->call($phpOnResult, 'len', 'zanzibar');
+    $phpDispatcher->call($phpOnResult, 'strlen', 'zanzibar');
 });
 
 echo "Running PHP strlen() benchmark for ", RUN_TIME, " seconds ...\n";
