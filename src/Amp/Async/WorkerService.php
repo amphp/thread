@@ -21,13 +21,7 @@ class WorkerService {
     function onReadable() {
         while ($frameArr = $this->parser->parse()) {
             $payload = $frameArr[3];
-            
             $callId = substr($payload, 0, 4);
-            
-            // @TODO MAYBE ? Validate call code == Dispatcher::CALL
-            //$callCode = ord($payload[4]);
-            assert(ord($payload[4]) == Dispatcher::CALL);
-            
             $procLen = ord($payload[5]);
             $procedure = substr($payload, 6, $procLen);
             $workload = unserialize(substr($payload, $procLen + 6));
