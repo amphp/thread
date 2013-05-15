@@ -6,15 +6,14 @@ class WorkerService {
     
     private $parser;
     private $writer;
-    private $chrCallCodeResult;
-    private $chrCallCodeError;
+    private $chrResultCode;
+    private $chrErrorCode;
     
     function __construct(FrameParser $parser, FrameWriter $writer) {
         $this->parser = $parser;
         $this->writer = $writer;
-        
-        $this->chrCallCodeResult = chr(Dispatcher::CALL_RESULT);
-        $this->chrCallCodeError  = chr(Dispatcher::CALL_ERROR);
+        $this->chrResultCode = chr(Dispatcher::CALL_RESULT);
+        $this->chrErrorCode  = chr(Dispatcher::CALL_ERROR);
         
         $parser->throwOnEof(FALSE);
     }
@@ -31,14 +30,20 @@ class WorkerService {
             
             $procLen = ord($payload[5]);
             $procedure = substr($payload, 6, $procLen);
-            $workload = substr($payload, $procLen + 6);
+            $workload = unserialize(substr($payload, $procLen + 6));
             
             try {
-                $this->invokeProcedure($callId, $procedure, $workload);
+                if (function_exists($procedure)) {
+                    $this->invokeProcedure($callId, $procedure, $workload);
+                } else {
+                    throw new \BadFunctionCallException(
+                        'Function does not exist: ' . $procedure
+                    );
+                }
             } catch (ResourceException $e) {
                 throw $e;
             } catch (\Exception $e) {
-                $payload = $callId . $this->chrCallCodeError . $e->__toString();
+                $payload = $callId . $this->chrErrorCode . $e->__toString();
                 $frame = new Frame($fin = 1, $rsv = 0, Frame::OP_DATA, $payload);
                 $this->writer->writeAll($frame);
             }
@@ -46,37 +51,10 @@ class WorkerService {
     }
     
     private function invokeProcedure($callId, $procedure, $workload) {
-        $result = $procedure($workload);
-        
-        if ($result instanceof \Iterator) {
-            $this->streamResult($callId, $result);
-        } elseif ($result === NULL || is_scalar($result)) {
-            $payload = $callId . $this->chrCallCodeResult . $result;
-            $frame = new Frame($fin = 1, $rsv = 0, Frame::OP_DATA, $payload);
-            $this->writer->writeAll($frame);
-        } else {
-            throw new \UnexpectedValueException(
-                'Invalid procedure return type: NULL, scalar or Iterator expected'
-            );
-        }
-    }
-    
-    private function streamResult($callId, \Iterator $result) {
-        while (TRUE) {
-            $chunk = $result->current();
-            $result->next();
-            $isFin = (int) !$result->valid();
-            
-            if (isset($chunk[0])) {
-                $chunk = $callId . $this->chrCallCodeResult . $chunk;
-                $frame = new Frame($isFin, $rsv = 0, Frame::OP_DATA, $chunk);
-                $this->writer->writeAll($frame);
-            }
-            
-            if ($isFin) {
-                break;
-            }
-        }
+        $result = call_user_func_array($procedure, $workload);
+        $payload = $callId . $this->chrResultCode . serialize($result);
+        $frame = new Frame($fin = 1, $rsv = 0, Frame::OP_DATA, $payload);
+        $this->writer->writeAll($frame);
     }
     
 }

@@ -14,7 +14,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         $callId = pack('N', 123456);
         
         $len = 256;
-        $workload = str_repeat('.', $len);
+        $workload = serialize([str_repeat('.', $len)]);
         $procedure = 'strlen';
         $procLen = chr(strlen($procedure));
         $payload = $callId . chr(Dispatcher::CALL) . $procLen . $procedure . $workload;
@@ -38,51 +38,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
         
         $this->assertEquals($callId, substr($payload, 0, 4));
-        $this->assertEquals($len, substr($payload, 5));
-        $this->assertEquals(ord($payload[4]), Dispatcher::CALL_RESULT);
-    }
-    
-    function testOnReadableWithStreamingMultiFrameResult() {
-        
-        $callId = pack('N', 123456);
-        
-        $procedure = 'streamWorkerResultFunc';
-        $procLen = chr(strlen($procedure));
-        $payload = $callId . chr(Dispatcher::CALL) . $procLen . $procedure;
-        $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
-        
-        $inputStream = fopen('php://memory', 'r+');
-        fwrite($inputStream, $callFrame);
-        rewind($inputStream);
-        
-        $outputStream = fopen('php://memory', 'r+');
-        $parser = new FrameParser($inputStream);
-        $writer = new FrameWriter($outputStream);
-        
-        $workerService = new WorkerService($parser, $writer);
-        $workerService->onReadable();
-        
-        rewind($outputStream);
-        
-        $endParser = new FrameParser($outputStream);
-        
-        $frameArr = $endParser->parse();
-        list($isFin, $rsv, $opcode, $payload) = $frameArr;
-        $this->assertEquals($isFin, 0);
-        $this->assertEquals($callId, substr($payload, 0, 4));
-        $this->assertEquals('chunk1', substr($payload, 5));
-        
-        $frameArr = $endParser->parse();
-        list($isFin, $rsv, $opcode, $payload) = $frameArr;
-        $this->assertEquals($isFin, 0);
-        $this->assertEquals($callId, substr($payload, 0, 4));
-        $this->assertEquals('chunk2', substr($payload, 5));
-        
-        $frameArr = $endParser->parse();
-        list($isFin, $rsv, $opcode, $payload) = $frameArr;
-        $this->assertEquals($isFin, 1);
-        $this->assertEquals($callId, substr($payload, 0, 4));
-        $this->assertEquals('chunk3', substr($payload, 5));
+        $this->assertEquals($len, unserialize(substr($payload, 5)));
         $this->assertEquals(ord($payload[4]), Dispatcher::CALL_RESULT);
     }
     
@@ -123,7 +79,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         $callId = pack('N', 123456);
         
         $procedure = 'strlen';
-        $workload = 'test';
+        $workload = serialize('test');
         $procLen = chr(strlen($procedure));
         $payload = $callId . chr(Dispatcher::CALL) . $procLen . $procedure . $workload;
         $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);

@@ -2,7 +2,7 @@ from sys import path
 from os.path import dirname, abspath
 
 # Add the ampy module to our PYTHONPATH before importing it
-ampy_dir = dirname(abspath(__file__)) + '/workers/python'
+ampy_dir = dirname(dirname(dirname(abspath(__file__)))) + '/workers/python'
 path.append(ampy_dir)
 import ampy
 
@@ -17,6 +17,8 @@ def hello_world(arg = None):
 # ------------------------------- LISTEN FOR WORK DISPATCHES ---------------------------------------
 
 if __name__ == "__main__":
+    
+    # Only functions defined in the callables dictionary are available for use
     
     callables = {
         'len':          len,            # Native len() function
