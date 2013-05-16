@@ -136,6 +136,12 @@ class Dispatcher {
      * @return string Returns the task's call ID
      */
     function call(callable $onResult, $procedure, $workload = NULL) {
+        if (!$this->isStarted) {
+            throw new \RuntimeException(
+                __CLASS__ . '::start() must be invoked before making calls'
+            );
+        }
+        
         if (!is_string($procedure)) {
             throw new \InvalidArgumentException;
         } elseif (($procLen = strlen($procedure)) > self::MAX_PROCEDURE_LENGTH) {
