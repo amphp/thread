@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Async\Worker;
+use Amp\MultiProcess\Worker;
 
 class WorkerTest extends PHPUnit_Framework_TestCase {
 

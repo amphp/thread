@@ -1,7 +1,7 @@
 <?php
 
-use Amp\Async\Frame,
-    Amp\Async\FrameWriter;
+use Amp\MultiProcess\Frame,
+    Amp\MultiProcess\FrameWriter;
 
 class FrameWriterTest extends PHPUnit_Framework_TestCase {
     
@@ -60,7 +60,7 @@ class FrameWriterTest extends PHPUnit_Framework_TestCase {
     }
     
     /**
-     * @expectedException Amp\Async\ResourceException
+     * @expectedException Amp\MultiProcess\ResourceException
      */
     function testWriteThrowsExceptionIfOutputStreamIsNotResource() {
         $str = 'test';

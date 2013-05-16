@@ -11,8 +11,8 @@
  * can access debug information by invoking `CallResult::getError()`.
  */
 
-use Amp\Async\PhpDispatcher,
-    Amp\Async\CallResult,
+use Amp\MultiProcess\PhpDispatcher,
+    Amp\MultiProcess\CallResult,
     Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';

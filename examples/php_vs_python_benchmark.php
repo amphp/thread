@@ -5,8 +5,8 @@
  * asynchronously in each language over a period of time.
  */
 
-use Amp\Async\Dispatcher,
-    Amp\Async\PhpDispatcher,
+use Amp\MultiProcess\Dispatcher,
+    Amp\MultiProcess\PhpDispatcher,
     Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';

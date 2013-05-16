@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Async;
+namespace Amp\MultiProcess;
 
 class PhpCallResultFactory extends CallResultFactory {
     

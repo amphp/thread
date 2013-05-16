@@ -1,11 +1,11 @@
 <?php
 
 use Amp\ReactorFactory,
-    Amp\Async\PhpDispatcher,
-    Amp\Async\CallResult,
-    Amp\Async\ResourceException,
-    Amp\Async\WorkerSession,
-    Amp\Async\WorkerSessionFactory;
+    Amp\MultiProcess\PhpDispatcher,
+    Amp\MultiProcess\CallResult,
+    Amp\MultiProcess\ResourceException,
+    Amp\MultiProcess\WorkerSession,
+    Amp\MultiProcess\WorkerSessionFactory;
 
 class PhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
@@ -74,7 +74,7 @@ class PhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
         
         $onResult = function(CallResult $callResult) use ($reactor) {
             $this->assertTrue($callResult->isError());
-            $this->assertInstanceOf('Amp\Async\TimeoutException', $callResult->getError());
+            $this->assertInstanceOf('Amp\MultiProcess\TimeoutException', $callResult->getError());
             $reactor->stop();
         };
         
@@ -126,7 +126,7 @@ class PhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
         
         $onResult = function(CallResult $callResult) use ($reactor) {
             $this->assertTrue($callResult->isError());
-            $this->assertInstanceOf('Amp\Async\WorkerException', $callResult->getError());
+            $this->assertInstanceOf('Amp\MultiProcess\WorkerException', $callResult->getError());
             $reactor->stop();
         };
         

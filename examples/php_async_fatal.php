@@ -15,8 +15,8 @@
  * call to a different function (one that won't error out) as well.
  */
 
-use Amp\Async\PhpDispatcher,
-    Amp\Async\CallResult,
+use Amp\MultiProcess\PhpDispatcher,
+    Amp\MultiProcess\CallResult,
     Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';

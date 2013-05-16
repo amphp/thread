@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Async\Frame;
+use Amp\MultiProcess\Frame;
 
 class FrameTest extends PHPUnit_Framework_TestCase {
     

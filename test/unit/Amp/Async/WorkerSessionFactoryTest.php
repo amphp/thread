@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Async\WorkerSessionFactory;
+use Amp\MultiProcess\WorkerSessionFactory;
 
 class WorkerSessionFactoryTest extends PHPUnit_Framework_TestCase {
     
@@ -11,7 +11,7 @@ class WorkerSessionFactoryTest extends PHPUnit_Framework_TestCase {
     
     function testInvoke() {
         $wsf = new WorkerSessionFactory;
-        $this->assertInstanceOf('Amp\Async\WorkerSession', $wsf(PHP_BINARY));
+        $this->assertInstanceOf('Amp\MultiProcess\WorkerSession', $wsf(PHP_BINARY));
     }
     
 }

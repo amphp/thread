@@ -1,13 +1,13 @@
 <?php
 
-use Amp\Async\WorkerSession;
+use Amp\MultiProcess\WorkerSession;
 
 class WorkerSessionTest extends PHPUnit_Framework_TestCase {
     
     function testParse() {
-        $worker = $this->getMock('Amp\Async\Worker', [], [NULL]);
-        $parser = $this->getMock('Amp\Async\FrameParser', [], [NULL]);
-        $writer = $this->getMock('Amp\Async\FrameWriter', [], [NULL]);
+        $worker = $this->getMock('Amp\MultiProcess\Worker', [], [NULL]);
+        $parser = $this->getMock('Amp\MultiProcess\FrameParser', [], [NULL]);
+        $writer = $this->getMock('Amp\MultiProcess\FrameWriter', [], [NULL]);
         
         $parser->expects($this->once())
                ->method('parse')
@@ -18,9 +18,9 @@ class WorkerSessionTest extends PHPUnit_Framework_TestCase {
     }
     
     function testWrite() {
-        $worker = $this->getMock('Amp\Async\Worker', [], [NULL]);
-        $parser = $this->getMock('Amp\Async\FrameParser', [], [NULL]);
-        $writer = $this->getMock('Amp\Async\FrameWriter', [], [NULL]);
+        $worker = $this->getMock('Amp\MultiProcess\Worker', [], [NULL]);
+        $parser = $this->getMock('Amp\MultiProcess\FrameParser', [], [NULL]);
+        $writer = $this->getMock('Amp\MultiProcess\FrameWriter', [], [NULL]);
         
         $writer->expects($this->once())
                ->method('write')
@@ -32,9 +32,9 @@ class WorkerSessionTest extends PHPUnit_Framework_TestCase {
     }
     
     function testGetWritePipe() {
-        $worker = $this->getMock('Amp\Async\Worker', [], [NULL]);
-        $parser = $this->getMock('Amp\Async\FrameParser', [], [NULL]);
-        $writer = $this->getMock('Amp\Async\FrameWriter', [], [NULL]);
+        $worker = $this->getMock('Amp\MultiProcess\Worker', [], [NULL]);
+        $parser = $this->getMock('Amp\MultiProcess\FrameParser', [], [NULL]);
+        $writer = $this->getMock('Amp\MultiProcess\FrameWriter', [], [NULL]);
         
         $worker->expects($this->once())
                ->method('getWritePipe')
@@ -45,9 +45,9 @@ class WorkerSessionTest extends PHPUnit_Framework_TestCase {
     }
     
     function testGetReadPipe() {
-        $worker = $this->getMock('Amp\Async\Worker', [], [NULL]);
-        $parser = $this->getMock('Amp\Async\FrameParser', [], [NULL]);
-        $writer = $this->getMock('Amp\Async\FrameWriter', [], [NULL]);
+        $worker = $this->getMock('Amp\MultiProcess\Worker', [], [NULL]);
+        $parser = $this->getMock('Amp\MultiProcess\FrameParser', [], [NULL]);
+        $writer = $this->getMock('Amp\MultiProcess\FrameWriter', [], [NULL]);
         
         $worker->expects($this->once())
                ->method('getReadPipe')
@@ -58,9 +58,9 @@ class WorkerSessionTest extends PHPUnit_Framework_TestCase {
     }
     
     function testGetPipes() {
-        $worker = $this->getMock('Amp\Async\Worker', [], [NULL]);
-        $parser = $this->getMock('Amp\Async\FrameParser', [], [NULL]);
-        $writer = $this->getMock('Amp\Async\FrameWriter', [], [NULL]);
+        $worker = $this->getMock('Amp\MultiProcess\Worker', [], [NULL]);
+        $parser = $this->getMock('Amp\MultiProcess\FrameParser', [], [NULL]);
+        $writer = $this->getMock('Amp\MultiProcess\FrameWriter', [], [NULL]);
         
         $worker->expects($this->once())
                ->method('getPipes')

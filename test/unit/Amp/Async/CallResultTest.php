@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Async\CallResult;
+use Amp\MultiProcess\CallResult;
 
 class CallResultTest extends PHPUnit_Framework_TestCase {
     

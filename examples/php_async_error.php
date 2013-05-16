@@ -7,8 +7,8 @@
  * addition to the function's return value.
  */
 
-use Amp\Async\PhpDispatcher,
-    Amp\Async\CallResult,
+use Amp\MultiProcess\PhpDispatcher,
+    Amp\MultiProcess\CallResult,
     Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';

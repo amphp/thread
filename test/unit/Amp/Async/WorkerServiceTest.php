@@ -1,11 +1,11 @@
 <?php
 
-use Amp\Async\WorkerService,
-    Amp\Async\FrameParser,
-    Amp\Async\FrameWriter,
-    Amp\Async\Frame,
-    Amp\Async\Dispatcher,
-    Amp\Async\ResourceException;
+use Amp\MultiProcess\WorkerService,
+    Amp\MultiProcess\FrameParser,
+    Amp\MultiProcess\FrameWriter,
+    Amp\MultiProcess\Frame,
+    Amp\MultiProcess\Dispatcher,
+    Amp\MultiProcess\ResourceException;
 
 class WorkerServiceTest extends PHPUnit_Framework_TestCase {
     
@@ -73,7 +73,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
     }
     
     /**
-     * @expectedException Amp\Async\ResourceException
+     * @expectedException Amp\MultiProcess\ResourceException
      */
     function testOnReadableThrowsExceptionOnBrokenWritePipe() {
         $callId = pack('N', 123456);
