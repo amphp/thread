@@ -147,9 +147,11 @@ class NativeReactor implements Reactor {
         $streamId = (int) $stream;
         $now = microtime(TRUE);
         
-        foreach ($this->readTimeouts[$streamId] as $subscriptionId => $timeoutArr) {
-            $timeoutArr[0] = $timeoutArr[0] + $now;
-            $this->readTimeouts[$streamId][$subscriptionId] = $timeoutArr;
+        if (!empty($this->readTimeouts[$streamId])) {
+            foreach ($this->readTimeouts[$streamId] as $subscriptionId => $timeoutArr) {
+                $timeoutArr[0] = $timeoutArr[0] + $now;
+                $this->readTimeouts[$streamId][$subscriptionId] = $timeoutArr;
+            }
         }
     }
     
@@ -167,9 +169,11 @@ class NativeReactor implements Reactor {
         $streamId = (int) $stream;
         $now = microtime(TRUE);
         
-        foreach ($this->writeTimeouts[$streamId] as $subscriptionId => $timeoutArr) {
-            $timeoutArr[0] = $timeoutArr[0] + $now;
-            $this->writeTimeouts[$streamId][$subscriptionId] = $timeoutArr;
+        if (!empty($this->writeTimeouts[$streamId])) {
+            foreach ($this->writeTimeouts[$streamId] as $subscriptionId => $timeoutArr) {
+                $timeoutArr[0] = $timeoutArr[0] + $now;
+                $this->writeTimeouts[$streamId][$subscriptionId] = $timeoutArr;
+            }
         }
     }
     
@@ -290,6 +294,10 @@ class NativeReactor implements Reactor {
         if (empty($this->readCallbacks[$streamId])) {
             unset($this->readStreams[$streamId]);
         }
+        
+        if (empty($this->readTimeouts[$streamId])) {
+            unset($this->readTimeouts[$streamId]);
+        }
     }
     
     private function clearWriteSubscription($streamId, $subscriptionId) {
@@ -300,6 +308,10 @@ class NativeReactor implements Reactor {
         
         if (empty($this->writeCallbacks[$streamId])) {
             unset($this->writeStreams[$streamId]);
+        }
+        
+        if (empty($this->writeTimeouts[$streamId])) {
+            unset($this->writeTimeouts[$streamId]);
         }
     }
     
