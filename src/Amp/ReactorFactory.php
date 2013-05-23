@@ -4,6 +4,10 @@ namespace Amp;
 
 class ReactorFactory {
     
+    function __invoke() {
+        return $this->select();
+    }
+    
     function select() {
         return $this->hasLibevent() ? new LibeventReactor : new NativeReactor;
     }
