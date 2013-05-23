@@ -33,7 +33,7 @@ $reactor->once(function() use ($reactor) {
 // ------------------------------------------------------------------------------------------------>
 
 // Call our hello_world function as many times as possible before we stop the reactor
-$reactor->repeat(function() use ($dispatcher, $onResult) {
+$reactor->schedule(function() use ($dispatcher, $onResult) {
     $dispatcher->call($onResult, 'hello_world');
 });
 

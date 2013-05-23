@@ -29,7 +29,7 @@ $reactor->once(function() use ($reactor) {
     $reactor->stop();
 }, $delayInSeconds = RUN_TIME);
 
-$reactor->repeat(function() use ($pythonDispatcher, $pythonOnResult) {
+$reactor->schedule(function() use ($pythonDispatcher, $pythonOnResult) {
     $pythonDispatcher->call($pythonOnResult, 'len', 'zanzibar');
 });
 
@@ -54,7 +54,7 @@ $reactor->once(function() use ($reactor) {
     $reactor->stop();
 }, $delayInSeconds = RUN_TIME);
 
-$reactor->repeat(function() use ($phpDispatcher, $phpOnResult) {
+$reactor->schedule(function() use ($phpDispatcher, $phpOnResult) {
     $phpDispatcher->call($phpOnResult, 'strlen', 'zanzibar');
 });
 

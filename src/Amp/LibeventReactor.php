@@ -2,12 +2,12 @@
 
 namespace Amp;
 
-class LibEventReactor implements Reactor {
+class LibeventReactor implements Reactor {
     
     private $base;
     private $subscriptions;
     private $repeatIterationMap;
-    private $resolution = 1000000;
+    private $resolution = self::MICRO_RESOLUTION;
     private $gcInterval = 0.75;
     private $garbage = [];
     
@@ -46,9 +46,7 @@ class LibEventReactor implements Reactor {
         $event = event_new();
         $delay = ($delay > 0) ? ($delay * $this->resolution) : 0;
         
-        $subscription = new LibEventSubscription($this, $event, $delay);
-        $this->subscriptions->attach($subscription, $event);
-        
+        $subscription = new Subscription($this);
         $wrapper = function() use ($callback, $subscription) {
             $this->cancel($subscription);
             
@@ -60,6 +58,8 @@ class LibEventReactor implements Reactor {
             }
         };
         
+        $this->subscriptions->attach($subscription, [$event, $delay, $wrapper]);
+        
         event_timer_set($event, $wrapper);
         event_base_set($event, $this->base);
         event_add($event, $delay);
@@ -67,19 +67,17 @@ class LibEventReactor implements Reactor {
         return $subscription;
     }
     
-    function repeat(callable $callback, $delay = 0, $iterations = 0) {
+    function schedule(callable $callback, $delay = 0, $iterations = -1) {
         $event = event_new();
         $delay = ($delay > 0) ? ($delay * $this->resolution) : 0;
         
-        $subscription = new LibEventSubscription($this, $event, $delay);
-        $this->subscriptions->attach($subscription, $event);
-        
+        $subscription = new Subscription($this);
         $iterations = filter_var($iterations, FILTER_VALIDATE_INT, ['options' => [
             'min_range' => 0,
             'default' => 0
         ]]);
         
-        if ($iterations) {
+        if ($iterations > 0) {
             $this->repeatIterationMap->attach($subscription, $iterations);
         }
         
@@ -87,7 +85,7 @@ class LibEventReactor implements Reactor {
             try {
                 $callback();
                 
-                if (!$iterations || $this->canRepeat($subscription)) {
+                if ($iterations <= 0 || $this->canRepeat($subscription)) {
                     event_add($event, $delay);
                 }
             } catch (\Exception $e) {
@@ -96,6 +94,8 @@ class LibEventReactor implements Reactor {
             }
         };
         
+        $this->subscriptions->attach($subscription, [$event, $delay, $wrapper]);
+        
         event_timer_set($event, $wrapper);
         event_base_set($event, $this->base);
         event_add($event, $delay);
@@ -103,7 +103,7 @@ class LibEventReactor implements Reactor {
         return $subscription;
     }
     
-    private function canRepeat(LibEventSubscription $subscription) {
+    private function canRepeat(Subscription $subscription) {
         $remainingIterations = $this->repeatIterationMap->offsetGet($subscription);
         
         if (--$remainingIterations > 0) {
@@ -140,22 +140,32 @@ class LibEventReactor implements Reactor {
         event_base_set($event, $this->base);
         event_add($event, $timeout);
         
-        $subscription = new LibEventSubscription($this, $event, $timeout);
-        $this->subscriptions->attach($subscription);
+        $subscription = new Subscription($this);
+        $this->subscriptions->attach($subscription, [$event, $timeout, $wrapper]);
         
         return $subscription;
     }
     
-    /**
-     * Sometimes it's desirable to cancel a subscription from within an event callback. We can't
-     * destroy lambda callbacks inside cancel() from inside a subscribed event callback, so instead
-     * we store the cancelled subscription in the garbage periodically clean up after ourselves.
-     */
+    function enable(Subscription $subscription) {
+        if ($this->subscriptions->contains($subscription)) {
+            list($event, $interval) = $this->subscriptions->offsetGet($subscription);
+            event_add($event, $interval);
+        }
+    }
+    
+    function disable(Subscription $subscription) {
+        if ($this->subscriptions->contains($subscription)) {
+            $event = $this->subscriptions->offsetGet($subscription)[0];
+            event_del($event);
+        }
+    }
+    
     function cancel(Subscription $subscription) {
-        $subscription->disable();
+        $this->disable($subscription);
+        $this->garbage[] = $this->subscriptions->offsetGet($subscription);
         $this->subscriptions->detach($subscription);
         $this->repeatIterationMap->detach($subscription);
-        $this->garbage[] = $subscription;
+        
     }
     
 }

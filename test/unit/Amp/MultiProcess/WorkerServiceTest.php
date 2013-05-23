@@ -89,7 +89,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         rewind($inputStream);
         
         $parser = new FrameParser($inputStream);
-        $writer = $this->getMock('Amp\\Async\\FrameWriter', NULL, ['writeAll']);
+        $writer = $this->getMock('Amp\MultiProcess\FrameWriter', NULL, ['writeAll']);
         $writer->expects($this->any())
                ->method('writeAll')
                ->will($this->throwException(new ResourceException));

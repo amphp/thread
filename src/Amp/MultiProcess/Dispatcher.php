@@ -90,7 +90,7 @@ class Dispatcher {
             $this->spawnWorkerSession();
         }
         
-        $this->autoWriteSubscription = $this->reactor->repeat(function() {
+        $this->autoWriteSubscription = $this->reactor->schedule(function() {
             foreach ($this->writableWorkers as $workerSession) {
                 if ($this->write($workerSession)) {
                     $this->writableWorkers->detach($workerSession);
@@ -99,7 +99,7 @@ class Dispatcher {
         }, $this->autoWriteInterval);
         
         if ($this->callTimeout) {
-            $this->autoTimeoutSubscription = $this->reactor->repeat(function() {
+            $this->autoTimeoutSubscription = $this->reactor->schedule(function() {
                 $this->autoTimeout();
             }, $this->timeoutCheckInterval);
         }

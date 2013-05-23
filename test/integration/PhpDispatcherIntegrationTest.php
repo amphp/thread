@@ -110,7 +110,7 @@ class PhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
             }
         };
         
-        $reactor->repeat(function() use ($dispatcher, $onResult) {
+        $reactor->schedule(function() use ($dispatcher, $onResult) {
             $dispatcher->call($onResult, 'dispatch_die_on_second_invocation');
         }, $delay = 0, $iterations = 2);
         

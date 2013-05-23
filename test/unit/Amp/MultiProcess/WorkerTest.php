@@ -6,7 +6,7 @@ class WorkerTest extends PHPUnit_Framework_TestCase {
 
     function testWorkerSpawnsSubProcess() {
         $worker = new Worker(PHP_BINARY);
-        $this->assertInstanceOf('Amp\\Async\\Worker', $worker);
+        $this->assertInstanceOf('Amp\MultiProcess\Worker', $worker);
         $this->assertFalse(getmypid() == $worker->getStatus()['pid']);
         
         return $worker;
