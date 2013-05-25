@@ -4,6 +4,49 @@ use Amp\NativeReactor;
 
 class NativeReactorTest extends PHPUnit_Framework_TestCase {
     
+    function testSubscriptionTimeoutDoesNotAffectSubscriptionsWithoutTimeouts() {
+        $reactor = new NativeReactor;
+        
+        $stream = STDIN;
+        $timeoutIncrement = 0;
+        $readableIncrement = 0;
+        
+        $reactor->onReadable($stream, function($stream, $trigger) use (&$readableIncrement) {
+            $readableIncrement++;
+            fwrite(STDERR, "we shouldn't ever be invoked!\n");
+        });
+        
+        $reactor->onReadable($stream, function($stream, $trigger) use ($reactor, &$timeoutIncrement) {
+            if ($trigger === NativeReactor::TIMEOUT) {
+                if ($timeoutIncrement++ >=3) {
+                    $reactor->stop();
+                }
+            }
+        }, $timeout = 0.001);
+        
+        $reactor->run();
+        
+        $this->assertEquals(0, $readableIncrement);
+    }
+    
+    function testSubscriptionIsNeverNotifiedIfStreamIsNeverReadable() {
+        $reactor = new NativeReactor;
+        $stream = STDIN;
+        $increment = 0;
+        
+        $reactor->onReadable($stream, function($stream) use (&$increment) {
+            $increment++;
+        });
+        
+        $reactor->once(function() use ($reactor) {
+            $reactor->stop();
+        }, $delay = 0.01);
+        
+        $reactor->run();
+        
+        $this->assertEquals(0, $increment);
+    }
+    
     function testTickExecutesReadyEvents() {
         $reactor = new NativeReactor;
         
@@ -122,20 +165,4 @@ class NativeReactorTest extends PHPUnit_Framework_TestCase {
         $reactor->run();
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

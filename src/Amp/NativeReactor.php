@@ -64,15 +64,17 @@ class NativeReactor implements Reactor {
     private function getAlarmInterval() {
         $min = $this->alarmIterationMap->count() ? $this->getNextAlarmTime() : NULL;
         
-        foreach ($this->readTimeouts as $timeoutArr) {
-            foreach ($timeoutArr as $timeout) {
-                $min = ($min && $min > $timeout) ? $timeout : $min;
+        foreach ($this->readTimeouts as $streamArr) {
+            foreach ($streamArr as $subscriptionId => $timeoutArr) {
+                $nextAlarm = $timeoutArr[1];
+                $min = (!$min || $min > $nextAlarm) ? $nextAlarm : $min;
             }
         }
         
-        foreach ($this->writeTimeouts as $timeoutArr) {
-            foreach ($timeoutArr as $timeout) {
-                $min = ($min && $min > $timeout) ? $timeout : $min;
+        foreach ($this->writeTimeouts as $streamArr) {
+            foreach ($streamArr as $subscriptionId => $timeoutArr) {
+                $nextAlarm = $timeoutArr[1];
+                $min = (!$min || $min > $nextAlarm) ? $nextAlarm : $min;
             }
         }
         
@@ -116,18 +118,28 @@ class NativeReactor implements Reactor {
         
         foreach ($this->readTimeouts as $streamId => $subscriptionArr) {
             foreach ($subscriptionArr as $subscriptionId => $timeoutArr) {
-                if ($now >= $timeoutArr[1]) {
+                if (empty($this->readCallbacks[$streamId][$subscriptionId])) {
+                    unset($this->readTimeouts[$streamId][$subscriptionId]);
+                } elseif ($now >= $timeoutArr[1]) {
+                    $callback = $this->readCallbacks[$streamId][$subscriptionId];
+                    $timeoutArr[1] = $now + $timeoutArr[0];
                     $stream = $this->readStreams[$streamId];
-                    $this->doReadCallbacksFor($stream, self::TIMEOUT);
+                    $callback($stream, self::TIMEOUT);
+                    $this->readTimeouts[$streamId][$subscriptionId] = $timeoutArr;
                 }
             }
         }
         
         foreach ($this->writeTimeouts as $streamId => $subscriptionArr) {
             foreach ($subscriptionArr as $subscriptionId => $timeoutArr) {
-                if ($now >= $timeoutArr[1]) {
+                if (empty($this->writeCallbacks[$streamId][$subscriptionId])) {
+                    unset($this->writeTimeouts[$streamId][$subscriptionId]);
+                } elseif ($now >= $timeoutArr[1]) {
+                    $callback = $this->writeCallbacks[$streamId][$subscriptionId];
+                    $timeoutArr[1] = $now + $timeoutArr[0];
                     $stream = $this->writeStreams[$streamId];
-                    $this->doWriteCallbacksFor($stream, self::TIMEOUT);
+                    $callback($stream, self::TIMEOUT);
+                    $this->writeTimeouts[$streamId][$subscriptionId] = $timeoutArr;
                 }
             }
         }
@@ -149,7 +161,7 @@ class NativeReactor implements Reactor {
         
         if (!empty($this->readTimeouts[$streamId])) {
             foreach ($this->readTimeouts[$streamId] as $subscriptionId => $timeoutArr) {
-                $timeoutArr[0] = $timeoutArr[0] + $now;
+                $timeoutArr[1] = $timeoutArr[0] + $now;
                 $this->readTimeouts[$streamId][$subscriptionId] = $timeoutArr;
             }
         }
@@ -171,7 +183,7 @@ class NativeReactor implements Reactor {
         
         if (!empty($this->writeTimeouts[$streamId])) {
             foreach ($this->writeTimeouts[$streamId] as $subscriptionId => $timeoutArr) {
-                $timeoutArr[0] = $timeoutArr[0] + $now;
+                $timeoutArr[1] = $timeoutArr[0] + $now;
                 $this->writeTimeouts[$streamId][$subscriptionId] = $timeoutArr;
             }
         }
@@ -279,7 +291,6 @@ class NativeReactor implements Reactor {
         
         $streamId = (int) $stream;
         $subscriptionId = spl_object_hash($subscription);
-        
         return ($flag === self::READ)
             ? $this->clearReadSubscription($streamId, $subscriptionId)
             : $this->clearWriteSubscription($streamId, $subscriptionId);
