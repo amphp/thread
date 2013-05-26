@@ -29,18 +29,24 @@ class NativeReactor implements Reactor {
     }
     
     function run() {
-        foreach ($this->alarmIterationMap as $alarm) {
-            $alarm->start();
-        }
-        
         $this->isRunning = TRUE;
-        
+        $this->enableAlarms();
         while ($this->isRunning) {
             $this->tick();
         }
     }
     
+    private function enableAlarms() {
+        foreach ($this->alarmIterationMap as $alarm) {
+            $alarm->start();
+        }
+    }
+    
     function tick() {
+        if (!$this->isRunning) {
+            $this->enableAlarms();
+        }
+        
         $timeToNextAlarm = $this->getAlarmInterval();
         
         if ($timeToNextAlarm <= 0) {

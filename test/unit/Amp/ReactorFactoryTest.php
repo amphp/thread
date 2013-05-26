@@ -25,5 +25,14 @@ class ReactorFactoryTest extends PHPUnit_Framework_TestCase {
         $reactor = $rf->select();
         $this->assertInstanceOf('Amp\NativeReactor', $reactor);
     }
+    
+    function testMagicInvokeDelegatesToSelectMethod() {
+        $rf = $this->getMock('Amp\ReactorFactory', ['select']);
+        $rf->expects($this->once())
+           ->method('select')
+           ->will($this->returnValue(42));
+        
+        $this->assertEquals(42, $rf->__invoke());
+    }
 }
 

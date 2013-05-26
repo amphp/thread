@@ -1,27 +1,18 @@
 <?php
 
-use Amp\ReactorFactory,
+use Amp\NativeReactor,
     Amp\MultiProcess\PhpDispatcher,
     Amp\MultiProcess\CallResult,
     Amp\MultiProcess\ResourceException,
     Amp\MultiProcess\WorkerSession,
     Amp\MultiProcess\WorkerSessionFactory;
 
-class PhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
-    
-    private function skipIfMissingExtLibevent() {
-        if (!extension_loaded('libevent')) {
-            $this->markTestSkipped(
-                'libevent extension not available'
-            );
-        }
-    }
+class NativePhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
     function testNativeFunctionDispatch() {
-        
         $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
         
-        $reactor = (new ReactorFactory)->select();
+        $reactor = new NativeReactor;
         $dispatcher = new PhpDispatcher($reactor, $functions);
         $dispatcher->setCallTimeout(1);
         $dispatcher->setGranularity(1);
@@ -43,10 +34,9 @@ class PhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     }
     
     function testCustomFunctionDispatch() {
-        
         $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
         
-        $reactor = (new ReactorFactory)->select();
+        $reactor = new NativeReactor;
         $dispatcher = new PhpDispatcher($reactor, $functions);
         $dispatcher->setGranularity(1);
         $dispatcher->start();
@@ -64,10 +54,9 @@ class PhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     }
     
     function testTimedOutCallResult() {
-        
         $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
         
-        $reactor = (new ReactorFactory)->select();
+        $reactor = new NativeReactor;
         $dispatcher = new PhpDispatcher($reactor, $functions);
         $dispatcher->setCallTimeout(1);
         $dispatcher->start();
@@ -96,7 +85,7 @@ class PhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     function testBrokenPipeOnRead() {
         $functions  = dirname(__DIR__) . '/fixture/dispatch_die_on_second_invocation.php';
         
-        $reactor = (new ReactorFactory)->select();
+        $reactor = new NativeReactor;
         $dispatcher = new PhpDispatcher($reactor, $functions);
         $dispatcher->start();
         
@@ -120,7 +109,7 @@ class PhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     function testErrorReturnOnUncaughtWorkerFunctionException() {
         $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
         
-        $reactor = (new ReactorFactory)->select();
+        $reactor = new NativeReactor;
         $dispatcher = new PhpDispatcher($reactor, $functions);
         $dispatcher->start();
         
