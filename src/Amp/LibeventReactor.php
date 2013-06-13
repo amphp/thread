@@ -161,11 +161,12 @@ class LibeventReactor implements Reactor {
     }
     
     function cancel(Subscription $subscription) {
-        $this->disable($subscription);
-        $this->garbage[] = $this->subscriptions->offsetGet($subscription);
-        $this->subscriptions->detach($subscription);
-        $this->repeatIterationMap->detach($subscription);
-        
+        if ($this->subscriptions->contains($subscription)) {
+            $this->disable($subscription);
+            $this->garbage[] = $this->subscriptions->offsetGet($subscription);
+            $this->subscriptions->detach($subscription);
+            $this->repeatIterationMap->detach($subscription);
+        }
     }
     
 }
