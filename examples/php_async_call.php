@@ -1,7 +1,7 @@
 <?php
 
-use Amp\Async\PhpDispatcher,
-    Amp\Async\CallResult,
+use Amp\MultiProcess\PhpDispatcher,
+    Amp\MultiProcess\CallResult,
     Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';
@@ -22,11 +22,10 @@ $reactor->once(function() use ($dispatcher, $reactor) {
 
 // ------------------------------------------------------------------------------------------------>
 
-// Echo each second in the main process to demonstrate that the sleep() call we made is asynchronous
-$reactor->repeat(function() {
+// Echo each second in the main process to demonstrate that the sleep() call above is asynchronous
+$reactor->schedule(function() {
     echo "tick ", time(), "\n";
 }, $interval = 1);
-
 
 // ------------------------------------------------------------------------------------------------>
 

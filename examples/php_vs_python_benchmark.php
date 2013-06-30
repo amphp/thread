@@ -5,8 +5,8 @@
  * asynchronously in each language over a period of time.
  */
 
-use Amp\Async\Dispatcher,
-    Amp\Async\PhpDispatcher,
+use Amp\MultiProcess\Dispatcher,
+    Amp\MultiProcess\PhpDispatcher,
     Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';
@@ -29,7 +29,7 @@ $reactor->once(function() use ($reactor) {
     $reactor->stop();
 }, $delayInSeconds = RUN_TIME);
 
-$reactor->repeat(function() use ($pythonDispatcher, $pythonOnResult) {
+$reactor->schedule(function() use ($pythonDispatcher, $pythonOnResult) {
     $pythonDispatcher->call($pythonOnResult, 'len', 'zanzibar');
 });
 
@@ -54,7 +54,7 @@ $reactor->once(function() use ($reactor) {
     $reactor->stop();
 }, $delayInSeconds = RUN_TIME);
 
-$reactor->repeat(function() use ($phpDispatcher, $phpOnResult) {
+$reactor->schedule(function() use ($phpDispatcher, $phpOnResult) {
     $phpDispatcher->call($phpOnResult, 'strlen', 'zanzibar');
 });
 

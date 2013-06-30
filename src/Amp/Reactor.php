@@ -4,17 +4,23 @@ namespace Amp;
 
 interface Reactor {
     
+    const MICRO_RESOLUTION = 1000000;
     const TIMEOUT = 1;
     const READ = 2;
-    const WRITE = 3;    
+    const WRITE = 3;
     
-    function tick();
     function run();
+    function tick();
     function stop();
-    function once(callable $callback, $delay = 0);
-    function repeat(callable $callback, $delay = 0, $iterations = 0);
-    function onReadable($ioStream, callable $callback, $timeout = -1);
-    function onWritable($ioStream, callable $callback, $timeout = -1);
+    
+    function onReadable($stream, callable $callback, $timeout = -1);
+    function onWritable($stream, callable $callback, $timeout = -1);
+    
+    function schedule(callable $callback, $delayInSeconds = 0, $iterations = -1);
+    function once(callable $callback, $delayInSeconds = 0);
+    
+    function enable(Subscription $subscription);
+    function disable(Subscription $subscription);
     function cancel(Subscription $subscription);
     
 }

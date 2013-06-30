@@ -10,9 +10,9 @@
  * expensive operation. It's preferable to fix the cause of the timeout instead.
  */
 
-use Amp\Async\PhpDispatcher,
-    Amp\Async\CallResult,
-    Amp\Async\TimeoutException,
+use Amp\MultiProcess\PhpDispatcher,
+    Amp\MultiProcess\CallResult,
+    Amp\MultiProcess\TimeoutException,
     Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';
