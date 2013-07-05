@@ -27,7 +27,7 @@ class WorkerService {
             $workload = unserialize(substr($payload, $procLen + 6));
             
             try {
-                if (function_exists($procedure)) {
+                if (is_callable($procedure)) {
                     $this->invokeProcedure($callId, $procedure, $workload);
                 } else {
                     throw new \BadFunctionCallException(
