@@ -10,6 +10,8 @@ interface Observable {
     const DRAIN = 'drain';
     const ERROR = 'error';
     const DONE = 'done';
+    const START = 'start';
+    const STOP = 'stop';
     
     /**
      * Attach an array of observation listeners

@@ -8,8 +8,6 @@ interface Reactor extends Observable {
     const TIMEOUT = 1;
     const READ = 2;
     const WRITE = 3;
-    const START = 'start';
-    const STOP = 'stop';
     
     function isRunning();
     
