@@ -2,8 +2,7 @@
 
 namespace Amp\MultiProcess;
 
-use Amp\Reactor,
-    Amp\ReactorFactory;
+use Amp\Reactor;
 
 class Dispatcher {
     
@@ -53,14 +52,14 @@ class Dispatcher {
         $this->writableWorkers = new \SplObjectStorage;
         $this->chrCallCode = chr(self::CALL);
         
+        if ($this->reactor->isRunning()) {
+            $this->start();
+        }
+        
         $this->reactor->observe([
             Reactor::START => [$this, 'start'],
             Reactor::STOP => [$this, 'stop'],
         ]);
-        
-        if ($this->reactor->isRunning()) {
-            $this->start();
-        }
     }
     
     function setCallTimeout($seconds) {
@@ -145,10 +144,12 @@ class Dispatcher {
      * @return string Returns the task's call ID
      */
     function call(callable $onResult, $procedure, $workload = NULL) {
-        if (!$this->isStarted) {
+        if (!$this->reactor->isRunning()) {
             throw new \RuntimeException(
-                __CLASS__ . '::start() must be invoked before making calls'
+                'Cannot dispatch calls; the event reactor is not running'
             );
+        } elseif (!$this->isStarted) {
+            $this->start();
         }
         
         if (!is_string($procedure)) {
@@ -363,6 +364,10 @@ class Dispatcher {
         if ($this->autoTimeoutSubscription) {
             $this->autoTimeoutSubscription->cancel();
         }
+    }
+    
+    function stopReactor() {
+        $this->reactor->stop();
     }
     
     function __destruct() {
