@@ -38,14 +38,18 @@ class LibeventReactor implements Reactor {
     }
     
     function tick() {
+        $this->isRunning = TRUE;
         event_base_loop($this->base, EVLOOP_ONCE | EVLOOP_NONBLOCK);
+        $this->isRunning = FALSE;
     }
     
     function run() {
-        $this->isRunning = TRUE;
-        $this->notify(self::START);
-        event_base_loop($this->base);
-        $this->isRunning = FALSE;
+        if (!$this->isRunning) {
+            $this->isRunning = TRUE;
+            $this->notify(self::START);
+            event_base_loop($this->base);
+            $this->isRunning = FALSE;
+        }
     }
     
     function stop() {

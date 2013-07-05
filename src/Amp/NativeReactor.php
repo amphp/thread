@@ -36,11 +36,14 @@ class NativeReactor implements Reactor {
     }
     
     function run() {
-        $this->isRunning = TRUE;
-        $this->notify(self::START);
-        $this->enableAlarms();
-        while ($this->isRunning) {
-            $this->tick();
+        if (!$this->isRunning) {
+            $this->isRunning = TRUE;
+            $this->notify(self::START);
+            $this->enableAlarms();
+            
+            while ($this->isRunning) {
+                $this->tick();
+            }
         }
     }
     
