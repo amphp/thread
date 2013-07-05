@@ -9,8 +9,7 @@ require dirname(__DIR__) . '/autoload.php';
 $asyncFunctions  = __DIR__ . '/support_files/my_async_functions.php';
 
 $reactor = (new ReactorFactory)->select();
-$dispatcher = new PhpDispatcher($reactor, $asyncFunctions, $poolSize = 4);
-$dispatcher->start();
+$dispatcher = new PhpDispatcher($reactor, $asyncFunctions, $workerProcessesToSpawn = 4);
 
 // ------------------------------------------------------------------------------------------------>
 

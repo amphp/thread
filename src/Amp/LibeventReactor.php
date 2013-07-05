@@ -4,18 +4,25 @@ namespace Amp;
 
 class LibeventReactor implements Reactor {
     
+    use Subject;
+    
     private $base;
     private $subscriptions;
     private $repeatIterationMap;
     private $resolution = self::MICRO_RESOLUTION;
     private $gcInterval = 0.75;
     private $garbage = [];
+    private $isRunning = FALSE;
     
     function __construct() {
         $this->base = event_base_new();
         $this->subscriptions = new \SplObjectStorage;
         $this->repeatIterationMap = new \SplObjectStorage;
         $this->registerGarbageCollector();
+    }
+    
+    function isRunning() {
+        return $this->isRunning;
     }
     
     private function registerGarbageCollector() {
@@ -35,11 +42,16 @@ class LibeventReactor implements Reactor {
     }
     
     function run() {
+        $this->isRunning = TRUE;
+        $this->notify(self::START);
         event_base_loop($this->base);
+        $this->isRunning = FALSE;
     }
     
     function stop() {
         event_base_loopexit($this->base);
+        $this->isRunning = FALSE;
+        $this->notify(self::STOP);
     }
     
     function once(callable $callback, $delay = 0) {

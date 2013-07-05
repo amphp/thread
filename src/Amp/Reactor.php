@@ -2,12 +2,16 @@
 
 namespace Amp;
 
-interface Reactor {
+interface Reactor extends Observable {
     
     const MICRO_RESOLUTION = 1000000;
     const TIMEOUT = 1;
     const READ = 2;
     const WRITE = 3;
+    const START = 'start';
+    const STOP = 'stop';
+    
+    function isRunning();
     
     function run();
     function tick();

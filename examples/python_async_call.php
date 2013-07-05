@@ -9,8 +9,7 @@ require dirname(__DIR__) . '/autoload.php';
 $workerCmd = '/usr/bin/python ' . __DIR__ . '/support_files/python_async_demo.py';
 
 $reactor = (new ReactorFactory)->select();
-$dispatcher = new Dispatcher($reactor, $workerCmd, $poolSize = 1);
-$dispatcher->start();
+$dispatcher = new Dispatcher($reactor, $workerCmd, $workerProcessesToSpawn = 1);
 
 $lastResult;
 

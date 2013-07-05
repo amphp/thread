@@ -4,6 +4,8 @@ namespace Amp;
 
 class NativeReactor implements Reactor {
     
+    use Subject;
+    
     private $alarmIterationMap;
     private $alarmSubscriptionMap;
     private $subscriptionAlarmMap;
@@ -24,12 +26,18 @@ class NativeReactor implements Reactor {
         $this->streamSubscriptions = new \SplObjectStorage;
     }
     
+    function isRunning() {
+        return $this->isRunning;
+    }
+    
     function stop() {
         $this->isRunning = FALSE;
+        $this->notify(self::STOP);
     }
     
     function run() {
         $this->isRunning = TRUE;
+        $this->notify(self::START);
         $this->enableAlarms();
         while ($this->isRunning) {
             $this->tick();

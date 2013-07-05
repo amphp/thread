@@ -52,6 +52,15 @@ class Dispatcher {
         
         $this->writableWorkers = new \SplObjectStorage;
         $this->chrCallCode = chr(self::CALL);
+        
+        $this->reactor->observe([
+            Reactor::START => [$this, 'start'],
+            Reactor::STOP => [$this, 'stop'],
+        ]);
+        
+        if ($this->reactor->isRunning()) {
+            $this->start();
+        }
     }
     
     function setCallTimeout($seconds) {
@@ -340,7 +349,7 @@ class Dispatcher {
         }
     }
     
-    function __destruct() {
+    function stop() {
         if (!$this->isStarted) {
             return;
         }
@@ -354,6 +363,10 @@ class Dispatcher {
         if ($this->autoTimeoutSubscription) {
             $this->autoTimeoutSubscription->cancel();
         }
+    }
+    
+    function __destruct() {
+        $this->stop();
     }
     
 }

@@ -17,8 +17,7 @@ define('RUN_TIME', 5);
 
 $reactor = (new ReactorFactory)->select();
 $workerCmd = '/usr/bin/python ' . __DIR__ . '/support_files/python_len_benchmark.py';
-$pythonDispatcher = new Dispatcher($reactor, $workerCmd, $poolSize = 1);
-$pythonDispatcher->start();
+$pythonDispatcher = new Dispatcher($reactor, $workerCmd, $workerProcessesToSpawn = 1);
 
 $pythonCount = 0;
 $pythonOnResult = function() use (&$pythonCount) {
@@ -42,8 +41,7 @@ echo "Python benchmark complete.\n";
 // ------------------------------------ PHP ------------------------------------------------------->
 
 $reactor = (new ReactorFactory)->select();
-$phpDispatcher = new PhpDispatcher($reactor, $workerCmd = NULL, $poolSize = 1);
-$phpDispatcher->start();
+$phpDispatcher = new PhpDispatcher($reactor, $workerCmd = NULL, $workerProcessesToSpawn = 1);
 
 $phpCount = 0;
 $phpOnResult = function() use (&$phpCount) {
