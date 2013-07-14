@@ -2,7 +2,8 @@
 
 /**
  * This script counts how many times Amp can calculate the length of a string and return the result
- * asynchronously in each language over a period of time.
+ * asynchronously in each language over a period of time using the MultiProcess dispatcher
+ * functionality.
  */
 
 use Amp\MultiProcess\Dispatcher,
