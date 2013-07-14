@@ -2,62 +2,154 @@
 
 namespace Amp;
 
+/**
+ * An event reactor utilizing ext/libevent. It's awesome. The End.
+ */
 class LibeventReactor implements Reactor {
     
     use Subject;
     
-    private $base;
+    private $eventBase;
     private $subscriptions;
     private $repeatIterationMap;
     private $resolution = self::MICRO_RESOLUTION;
-    private $gcInterval = 0.75;
+    private $enableOnStartQueue = [];
     private $garbage = [];
+    private $garbageCollectionEvent;
+    private $isGarbageCollectionScheduled = FALSE;
     private $isRunning = FALSE;
+    private $stopException;
     
     function __construct() {
-        $this->base = event_base_new();
+        $this->eventBase = event_base_new();
         $this->subscriptions = new \SplObjectStorage;
         $this->repeatIterationMap = new \SplObjectStorage;
-        $this->registerGarbageCollector();
+        
+        $this->garbageCollectionEvent = $gcEvent = event_new();
+        event_timer_set($gcEvent, [$this, 'collectGarbage']);
+        event_base_set($gcEvent, $this->eventBase);
     }
     
-    function isRunning() {
-        return $this->isRunning;
-    }
-    
-    private function registerGarbageCollector() {
-        $garbageEvent = event_new();
-        event_timer_set($garbageEvent, [$this, 'collectGarbage'], $garbageEvent);
-        event_base_set($garbageEvent, $this->base);
-        event_add($garbageEvent, $this->gcInterval * $this->resolution);
-    }
-    
-    private function collectGarbage($nullFd, $flags, $garbageEvent) {
-        $this->garbage = [];
-        event_add($garbageEvent, $this->gcInterval * $this->resolution);
-    }
-    
-    function tick() {
-        $this->isRunning = TRUE;
-        event_base_loop($this->base, EVLOOP_ONCE | EVLOOP_NONBLOCK);
-        $this->isRunning = FALSE;
-    }
-    
+    /**
+     * Start the event reactor
+     * 
+     * Give program control to the reactor and begin event loop iteration. Program control will not
+     * be returned until Reactor::stop is invoked or an exception is thrown. If the reactor is
+     * already running this function has no effect.
+     * 
+     * @return void
+     */
     function run() {
         if (!$this->isRunning) {
             $this->isRunning = TRUE;
+            $this->enableOnStart();
             $this->notify(self::START);
-            event_base_loop($this->base);
+            event_base_loop($this->eventBase);
             $this->isRunning = FALSE;
         }
     }
     
-    function stop() {
-        event_base_loopexit($this->base);
-        $this->isRunning = FALSE;
-        $this->notify(self::STOP);
+    private function enableOnStart() {
+        foreach ($this->enableOnStartQueue as $eventArr) {
+            list($event, $interval) = $eventArr;
+            event_add($event, $interval);
+        }
     }
     
+    /**
+     * Is the reactor running at the moment?
+     * 
+     * @return bool
+     */
+    function isRunning() {
+        return $this->isRunning;
+    }
+    
+    /**
+     * Stop the event reactor
+     * 
+     * When the reactor stops, all scheduled events are disabled but not cancelled. If the reactor
+     * is subsequently restarted these unresolved event subscriptions will be re-enabled for
+     * execution.
+     * 
+     * @return void
+     */
+    function stop() {
+        $this->storeUnresolvedEventsForReenable();
+        $this->scheduleGarbageCollection();
+        $this->isRunning = FALSE;
+        $this->notify(self::STOP);
+        
+        if ($this->stopException) {
+            throw $this->stopException;
+        }
+    }
+    
+    private function storeUnresolvedEventsForReenable() {
+        foreach ($this->subscriptions as $subscription) {
+            $eventArr = $this->subscriptions->offsetGet($subscription);
+            if ($subscription->isEnabled()) {
+                $this->enableOnStartQueue[] = $eventArr;
+            }
+            $event = $eventArr[0];
+            event_del($event);
+        }
+    }
+    
+    /**
+     * Execute a single event loop iteration
+     * 
+     * Unlike Reactor::run, this method will execute a single event loop iteration and immediately
+     * return control of the program back to the calling context. If the reactor is already running
+     * this function has no effect.
+     * 
+     * @return void
+     */
+    function tick() {
+        if (!$this->isRunning) {
+            $this->isRunning = TRUE;
+            $this->enableOnStart();
+            event_base_loop($this->eventBase, EVLOOP_ONCE | EVLOOP_NONBLOCK);
+            $this->isRunning = FALSE;
+        }
+    }
+    
+    /**
+     * Schedule a callback for immediate invocation in the next event loop iteration
+     * 
+     * Callbacks scheduled using this method are not associated with an event subscription and
+     * cannot be cancelled or disabled once assigned. They will be executed as soon as possible
+     * after the current event loop iteration completes barring an exception or stop call.
+     * 
+     * @param callable $callback Any valid PHP callable
+     * @return void
+     */
+    function immediately(callable $callback) {
+        $wrapper = function() use ($callback) {
+            try {
+                $callback();
+            } catch (\Exception $e) {
+                $this->stopException = $e;
+                $this->stop();
+            }
+        };
+        
+        $event = event_new();
+        event_timer_set($event, $wrapper);
+        event_base_set($event, $this->eventBase);
+        event_add($event, $delay = 0);
+    }
+    
+    /**
+     * Schedule a callback to execute once with an optional delay
+     * 
+     * Callbacks scheduled using Reactor::once are associated with an event subscription and may
+     * be enabled, disabled or cancelled prior to execution.
+     * 
+     * @param callable $callback Any valid PHP callable
+     * @param float $delay An optional delay (in seconds) until the callback should be executed
+     * @return Subscription Returns a subscription referencing the scheduled event
+     */
     function once(callable $callback, $delay = 0) {
         $event = event_new();
         $delay = ($delay > 0) ? ($delay * $this->resolution) : 0;
@@ -69,20 +161,42 @@ class LibeventReactor implements Reactor {
             try {
                 $callback();
             } catch (\Exception $e) {
+                $this->stopException = $e;
                 $this->stop();
-                throw $e;
             }
         };
         
         $this->subscriptions->attach($subscription, [$event, $delay, $wrapper]);
         
         event_timer_set($event, $wrapper);
-        event_base_set($event, $this->base);
+        event_base_set($event, $this->eventBase);
         event_add($event, $delay);
         
         return $subscription;
     }
     
+    /**
+     * Schedule a recurring callback.
+     * 
+     * Schedule a callback to be invoked at the recurring interval specified by the $delay argument.
+     * An optional number of iterations for which the callback should be repeated may be specified
+     * by the third parameter, $iterations. If the iteration count is less than or equal to zero
+     * the callback will repeat infinitely at the interval specified by the $delay parameter until
+     * its subscription is explicitly cancelled.
+     * 
+     * IMPORTANT:
+     * ==========
+     * For events scheduled to execute forever ($iterations <= 0), the event subscription returned
+     * MUST be retained by the calling context for future cancellation or the program will never
+     * end (barring an uncaught exception). Callbacks scheduled with a finite number of iterations
+     * will have their subscriptions and associated memory automatically garbage collected once
+     * the predefined iteration count is reached.
+     * 
+     * @param callable $callback Any valid PHP callable
+     * @param float $delay An optional delay (in seconds) to observe between callback executions
+     * @param int $iterations How many times should the callback repeat?
+     * @return Subscription Returns a subscription referencing the recurring event
+     */
     function schedule(callable $callback, $delay = 0, $iterations = -1) {
         $event = event_new();
         $delay = ($delay > 0) ? ($delay * $this->resolution) : 0;
@@ -105,15 +219,15 @@ class LibeventReactor implements Reactor {
                     event_add($event, $delay);
                 }
             } catch (\Exception $e) {
+                $this->stopException = $e;
                 $this->stop();
-                throw $e;
             }
         };
         
         $this->subscriptions->attach($subscription, [$event, $delay, $wrapper]);
         
         event_timer_set($event, $wrapper);
-        event_base_set($event, $this->base);
+        event_base_set($event, $this->eventBase);
         event_add($event, $delay);
         
         return $subscription;
@@ -131,29 +245,71 @@ class LibeventReactor implements Reactor {
         }
     }
     
-    function onReadable($ioStream, callable $callback, $timeout = -1) {
-        return $this->subscribe($ioStream, EV_READ | EV_PERSIST, $callback, $timeout);
+    /**
+     * Watch a stream resource for readable data and invoke the callback when said data is available
+     * 
+     * When invoked, callbacks are passed two arguments: the stream resource with readable data and
+     * the trigger that caused the invocation. In the event of readable data the trigger value is
+     * equal to the Reactor::READ constant. If invocation resulted from a timeout the trigger value
+     * equates to the Reactor::TIMEOUT constant.
+     * 
+     * Note that for our purposes EOF (end of file) counts as "readable data." For example, readable
+     * subscription callbacks will be notified when a socket stream reaches EOF due to a disconnect
+     * from the other part.
+     * 
+     * IMPORTANT:
+     * ==========
+     * Stream subscriptions are NOT automatically garbage collected when a stream resource is closed.
+     * This means that unless you want to create memory leaks in your application you MUST manually
+     * call the returned subscription's cancel() method when you're finished with the stream.
+     * 
+     * @param resource $stream A stream resource to watch for readable data
+     * @param callable $callback Any valid PHP callable
+     * @param float $timeout An optional timeout after which the callback will be invoked if no activity occurred
+     * @return Subscription Returns a subscription referencing the event
+     */
+    function onReadable($stream, callable $callback, $timeout = -1) {
+        return $this->watchStream($stream, EV_READ | EV_PERSIST, $callback, $timeout);
     }
     
-    function onWritable($ioStream, callable $callback, $timeout = -1) {
-        return $this->subscribe($ioStream, EV_WRITE | EV_PERSIST, $callback, $timeout);
+    /**
+     * Watch for a stream resource to become writable
+     * 
+     * When invoked, callbacks are passed two arguments: the writable stream resource and the
+     * trigger that caused the invocation. In the event of readable data the trigger value is equal
+     * to the Reactor::WRITE constant. If invocation resulted from a timeout the trigger value
+     * equates to the Reactor::TIMEOUT constant.
+     * 
+     * IMPORTANT:
+     * ==========
+     * Stream subscriptions are NOT automatically garbage collected when a stream resource is closed.
+     * This means that unless you want to create memory leaks in your application you MUST manually
+     * call the returned subscription's cancel() method when you're finished with the stream.
+     * 
+     * @param resource $stream A stream resource to watch for writability
+     * @param callable $callback Any valid PHP callable
+     * @param float $timeout An optional timeout after which the callback will be invoked if no activity occurred
+     * @return Subscription Returns a subscription referencing the event
+     */
+    function onWritable($stream, callable $callback, $timeout = -1) {
+        return $this->watchStream($stream, EV_WRITE | EV_PERSIST, $callback, $timeout);
     }
     
-    private function subscribe($ioStream, $flags, callable $callback, $timeout) {
+    private function watchStream($stream, $flags, callable $callback, $timeout) {
         $event = event_new();
         $timeout = ($timeout >= 0) ? ($timeout * $this->resolution) : -1;
         
-        $wrapper = function($ioStream, $triggeredBy) use ($callback) {
+        $wrapper = function($stream, $triggeredBy) use ($callback) {
             try {
-                $callback($ioStream, $triggeredBy);
+                $callback($stream, $triggeredBy);
             } catch (\Exception $e) {
+                $this->stopException = $e;
                 $this->stop();
-                throw $e;
             }
         };
         
-        event_set($event, $ioStream, $flags, $wrapper);
-        event_base_set($event, $this->base);
+        event_set($event, $stream, $flags, $wrapper);
+        event_base_set($event, $this->eventBase);
         event_add($event, $timeout);
         
         $subscription = new Subscription($this);
@@ -162,13 +318,30 @@ class LibeventReactor implements Reactor {
         return $subscription;
     }
     
+    /**
+     * Enable a previously disabled event/stream subscription
+     * 
+     * @param Subscription $subscription
+     * @throws \RuntimeException If the subscription has previously been cancelled
+     * @return void
+     */
     function enable(Subscription $subscription) {
-        if ($this->subscriptions->contains($subscription)) {
+        if ($subscription->isCancelled()) {
+            throw new \RuntimeException(
+                'Cannot reenable a previously-cancelled subscription'
+            );
+        } elseif ($this->subscriptions->contains($subscription)) {
             list($event, $interval) = $this->subscriptions->offsetGet($subscription);
             event_add($event, $interval);
         }
     }
     
+    /**
+     * Temporarily disable an active event or stream subscription
+     * 
+     * @param Subscription $subscription
+     * @return void
+     */
     function disable(Subscription $subscription) {
         if ($this->subscriptions->contains($subscription)) {
             $event = $this->subscriptions->offsetGet($subscription)[0];
@@ -176,12 +349,38 @@ class LibeventReactor implements Reactor {
         }
     }
     
+    /**
+     * Permanently cancel an event or stream subscription
+     * 
+     * @param Subscription $subscription
+     * @return void
+     */
     function cancel(Subscription $subscription) {
         if ($this->subscriptions->contains($subscription)) {
-            $this->disable($subscription);
-            $this->garbage[] = $this->subscriptions->offsetGet($subscription);
+            $this->garbage[] = $subscriptionArr = $this->subscriptions->offsetGet($subscription);
+            $event = $subscriptionArr[0];
+            event_del($event);
+            
             $this->subscriptions->detach($subscription);
             $this->repeatIterationMap->detach($subscription);
+            $this->scheduleGarbageCollection();
+        }
+    }
+    
+    private function scheduleGarbageCollection() {
+        if (!$this->isGarbageCollectionScheduled) {
+            event_add($this->garbageCollectionEvent, 0);
+            $this->isGarbageCollectionScheduled = TRUE;
+        }
+    }
+    
+    private function collectGarbage() {
+        $this->garbage = [];
+        $this->isGarbageCollectionScheduled = FALSE;
+        event_del($this->garbageCollectionEvent);
+        
+        if (!$this->isRunning) {
+            event_base_loopexit($this->eventBase);
         }
     }
     

@@ -53,19 +53,37 @@ class LibeventReactorTest extends PHPUnit_Framework_TestCase {
         $this->assertInstanceOf('Amp\Subscription', $subscription);
     }
     
-    function testReactorDoesntSwallowOnceCallbackException() {
+    /**
+     * @expectedException RuntimeException
+     * @expectedExceptionMessage test
+     */
+    function testReactorAllowsExceptionToBubbleUpDuringTick() {
         $this->skipIfMissingExtLibevent();
         $reactor = new LibeventReactor;
-        
-        $reactor->schedule(function(){}, $delay = 1);
-        $reactor->once(function(){ throw new Exception('test'); });
-        
-        try {
-            $reactor->tick();
-            $this->fail('Expected exception not thrown');
-        } catch (Exception $e) {
-            // woot! this is what we wanted
-        }
+        $reactor->once(function(){ throw new RuntimeException('test'); });
+        $reactor->tick();
+    }
+    
+    /**
+     * @expectedException RuntimeException
+     * @expectedExceptionMessage test
+     */
+    function testReactorAllowsExceptionToBubbleUpDuringRun() {
+        $this->skipIfMissingExtLibevent();
+        $reactor = new LibeventReactor;
+        $reactor->once(function(){ throw new RuntimeException('test'); });
+        $reactor->run();
+    }
+    
+    /**
+     * @expectedException RuntimeException
+     * @expectedExceptionMessage test
+     */
+    function testReactorAllowsExceptionToBubbleUpFromRepeatingAlarmDuringRun() {
+        $this->skipIfMissingExtLibevent();
+        $reactor = new LibeventReactor;
+        $reactor->schedule(function(){ throw new RuntimeException('test'); });
+        $reactor->run();
     }
     
     function testRepeatReturnsEventSubscription() {
@@ -75,20 +93,6 @@ class LibeventReactorTest extends PHPUnit_Framework_TestCase {
         $subscription = $reactor->schedule(function(){}, $interval = 1);
         
         $this->assertInstanceOf('Amp\Subscription', $subscription);
-    }
-    
-    function testReactorDoesntSwallowRepeatCallbackException() {
-        $this->skipIfMissingExtLibevent();
-        $reactor = new LibeventReactor;
-        
-        $reactor->schedule(function(){ throw new Exception('test'); });
-        
-        try {
-            $reactor->run();
-            $this->fail('Expected exception not thrown');
-        } catch (Exception $e) {
-            // woot! this is what we wanted
-        }
     }
     
     function testCancelRemovesSubscription() {
