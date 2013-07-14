@@ -16,16 +16,6 @@ class ReactorFactoryTest extends PHPUnit_Framework_TestCase {
         $this->assertInstanceOf('Amp\LibeventReactor', $reactor);
     }
     
-    function testSelectReturnsNativeReactorIfLibeventNotLoaded() {
-        $rf = $this->getMock('Amp\ReactorFactory', ['hasLibevent']);
-        $rf->expects($this->once())
-           ->method('hasLibevent')
-           ->will($this->returnValue(FALSE));
-        
-        $reactor = $rf->select();
-        $this->assertInstanceOf('Amp\NativeReactor', $reactor);
-    }
-    
     function testMagicInvokeDelegatesToSelectMethod() {
         $rf = $this->getMock('Amp\ReactorFactory', ['select']);
         $rf->expects($this->once())

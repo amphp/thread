@@ -4,19 +4,18 @@ namespace Amp;
 
 class ReactorFactory {
     
+    private $hasLibevent;
+    
+    function __construct() {
+        $this->hasLibevent = extension_loaded('libevent');
+    }
+    
     function __invoke() {
         return $this->select();
     }
     
     function select() {
-        return $this->hasLibevent() ? new LibeventReactor : new NativeReactor;
+        return $this->hasLibevent ? new LibeventReactor : new NativeReactor;
     }
     
-    /**
-     * This method exists to mock the presence of the libevent extension in unit tests
-     */
-    protected function hasLibevent() {
-        return extension_loaded('libevent');
-    }
 }
-
