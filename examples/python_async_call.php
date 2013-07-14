@@ -6,7 +6,7 @@ use Amp\MultiProcess\Dispatcher,
 
 require dirname(__DIR__) . '/autoload.php';
 
-$workerCmd = '/usr/bin/python ' . __DIR__ . '/support_files/python_async_demo.py';
+$workerCmd = '/usr/bin/python ' . __DIR__ . '/support/python_async_demo.py';
 
 $reactor = (new ReactorFactory)->select();
 $dispatcher = new Dispatcher($reactor, $workerCmd, $workerProcessesToSpawn = 1);

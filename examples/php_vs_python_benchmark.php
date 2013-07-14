@@ -17,7 +17,7 @@ define('RUN_TIME', 5);
 // ------------------------------------- PYTHON --------------------------------------------------->
 
 $reactor = (new ReactorFactory)->select();
-$workerCmd = '/usr/bin/python ' . __DIR__ . '/support_files/python_len_benchmark.py';
+$workerCmd = '/usr/bin/python ' . __DIR__ . '/support/python_len_benchmark.py';
 $pythonDispatcher = new Dispatcher($reactor, $workerCmd, $workerProcessesToSpawn = 1);
 
 $pythonCount = 0;

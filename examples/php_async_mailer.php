@@ -5,10 +5,10 @@ use Amp\MultiProcess\PhpDispatcher,
     Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';
-require __DIR__ . '/support_files/async_mailer/MyAsyncMailer.php';
+require __DIR__ . '/support/async_mailer/MyAsyncMailer.php';
 
 $reactor = (new ReactorFactory)->select();
-$include = __DIR__ . '/support_files/async_mailer/StaticMailWorker.php';
+$include = __DIR__ . '/support/async_mailer/StaticMailWorker.php';
 $dispatcher = new PhpDispatcher($reactor, $include, $workerProcessesToSpawn = 8);
 
 $mailer = new MyAsyncMailer($dispatcher);
