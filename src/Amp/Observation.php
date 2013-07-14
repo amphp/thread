@@ -40,7 +40,7 @@ class Observation {
     }
     
     function cancel() {
-        $this->subject->forget($this);
+        $this->subject->removeObserver($this);
     }
     
     function modify(array $observerCallbacks) {

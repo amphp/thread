@@ -9,7 +9,7 @@ trait Subject {
     
     private $observers;
     
-    function observe(array $eventListenerMap) {
+    function addObserver(array $eventListenerMap) {
         $observation = new Observation($this, $eventListenerMap);
         $this->observers = $this->observers ?: new \SplObjectStorage;
         $this->observers->attach($observation);
@@ -17,13 +17,13 @@ trait Subject {
         return $observation;
     }
     
-    function forget(Observation $observation) {
+    function removeObserver(Observation $observation) {
         if ($this->observers) {
             $this->observers->detach($observation);
         }
     }
     
-    function forgetAll() {
+    function removeAllObservers() {
         $this->observers = new \SplObjectStorage;
     }
     
@@ -36,4 +36,3 @@ trait Subject {
     }
     
 }
-

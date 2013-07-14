@@ -56,7 +56,7 @@ class Dispatcher {
             $this->start();
         }
         
-        $this->reactor->observe([
+        $this->reactor->addObserver([
             Reactor::START => [$this, 'start'],
             Reactor::STOP => [$this, 'stop'],
         ]);
