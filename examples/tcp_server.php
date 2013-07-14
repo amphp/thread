@@ -1,7 +1,7 @@
 <?php
 
-use Amp\ReactorFactory,
-    Amp\TcpServer;
+use Amp\Watch\ReactorFactory,
+    Amp\Serve\TcpServer;
 
 date_default_timezone_set(ini_get('date.timezone') ?: 'UTC');
 

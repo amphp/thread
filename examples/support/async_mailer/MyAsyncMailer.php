@@ -1,7 +1,7 @@
 <?php
 
-use Amp\MultiProcess\PhpDispatcher,
-    Amp\MultiProcess\CallResult;
+use Amp\Dispatch\Process\PhpDispatcher,
+    Amp\Dispatch\Process\CallResult;
 
 class MyAsyncMailer {
     

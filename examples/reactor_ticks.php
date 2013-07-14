@@ -11,7 +11,7 @@ require dirname(__DIR__) . '/autoload.php';
 
 stream_set_blocking(STDIN, FALSE);
 
-$reactor = (new Amp\ReactorFactory)->select();
+$reactor = (new Amp\Watch\ReactorFactory)->select();
 
 $reactorHasControl = TRUE;
 

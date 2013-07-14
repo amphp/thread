@@ -1,11 +1,11 @@
 <?php
 
-use Amp\LibeventReactor,
-    Amp\MultiProcess\PhpDispatcher,
-    Amp\MultiProcess\CallResult,
-    Amp\MultiProcess\ResourceException,
-    Amp\MultiProcess\WorkerSession,
-    Amp\MultiProcess\WorkerSessionFactory;
+use Amp\Watch\LibeventReactor,
+    Amp\Dispatch\Process\PhpDispatcher,
+    Amp\Dispatch\Process\CallResult,
+    Amp\Dispatch\Process\ResourceException,
+    Amp\Dispatch\Process\WorkerSession,
+    Amp\Dispatch\Process\WorkerSessionFactory;
 
 class LibeventPhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
@@ -74,7 +74,7 @@ class LibeventPhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
         
         $onResult = function(CallResult $callResult) use ($reactor) {
             $this->assertTrue($callResult->isError());
-            $this->assertInstanceOf('Amp\MultiProcess\TimeoutException', $callResult->getError());
+            $this->assertInstanceOf('Amp\Dispatch\Process\TimeoutException', $callResult->getError());
             $reactor->stop();
         };
         
@@ -128,7 +128,7 @@ class LibeventPhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
         
         $onResult = function(CallResult $callResult) use ($reactor) {
             $this->assertTrue($callResult->isError());
-            $this->assertInstanceOf('Amp\MultiProcess\WorkerException', $callResult->getError());
+            $this->assertInstanceOf('Amp\Dispatch\Process\WorkerException', $callResult->getError());
             $reactor->stop();
         };
         

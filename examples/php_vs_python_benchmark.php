@@ -6,9 +6,9 @@
  * functionality.
  */
 
-use Amp\MultiProcess\Dispatcher,
-    Amp\MultiProcess\PhpDispatcher,
-    Amp\ReactorFactory;
+use Amp\Dispatch\Process\Dispatcher,
+    Amp\Dispatch\Process\PhpDispatcher,
+    Amp\Watch\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';
 

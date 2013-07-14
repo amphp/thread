@@ -1,8 +1,8 @@
 <?php
 
-use Amp\MultiProcess\PhpDispatcher,
-    Amp\MultiProcess\CallResult,
-    Amp\ReactorFactory;
+use Amp\Dispatch\Process\PhpDispatcher,
+    Amp\Dispatch\Process\CallResult,
+    Amp\Watch\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';
 require __DIR__ . '/support/async_mailer/MyAsyncMailer.php';

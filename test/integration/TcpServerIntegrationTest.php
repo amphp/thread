@@ -1,7 +1,7 @@
 <?php
 
-use Amp\ReactorFactory,
-    Amp\TcpServer;
+use Amp\Watch\ReactorFactory,
+    Amp\Serve\TcpServer;
 
 class TcpServerIntegrationTest extends PHPUnit_Framework_TestCase {
     

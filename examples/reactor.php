@@ -2,7 +2,7 @@
 
 require dirname(__DIR__) . '/autoload.php';
 
-$reactor = (new Amp\ReactorFactory)->select();
+$reactor = (new Amp\Watch\ReactorFactory)->select();
 
 stream_set_blocking(STDIN, FALSE);
 
