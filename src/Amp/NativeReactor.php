@@ -10,6 +10,7 @@ class NativeReactor implements Reactor {
     private $alarmSubscriptionMap;
     private $subscriptionAlarmMap;
     private $streamSubscriptions;
+    private $subscriptionEnabler;
     private $readStreams = [];
     private $readTimeouts = [];
     private $readCallbacks = [];
@@ -24,6 +25,9 @@ class NativeReactor implements Reactor {
         $this->alarmSubscriptionMap = new \SplObjectStorage;
         $this->subscriptionAlarmMap = new \SplObjectStorage;
         $this->streamSubscriptions = new \SplObjectStorage;
+        $this->subscriptionEnabler = function(Subscription $subscription, $newStatus) {
+            $this->changeSubscriptionStatus($subscription, $newStatus);
+        };
     }
     
     /**
@@ -262,14 +266,14 @@ class NativeReactor implements Reactor {
      * Schedule a callback for immediate invocation in the next event loop iteration
      * 
      * Callbacks scheduled using this method are not associated with an event subscription and
-     * cannot be cancelled or disabled once assigned. They will be executed as soon as possible
-     * after the current event loop iteration completes barring an exception or stop call.
+     * cannot be cancelled or disabled prior to invocation. They will be executed as soon as 
+     * possible after the current event loop iteration completes barring an exception or stop call.
      * 
      * @param callable $callback Any valid PHP callable
      * @return void
      */
     function immediately(callable $callback) {
-        $this->once($callback);
+        $this->once($callback, $delay = 0);
     }
     
     /**
@@ -318,7 +322,7 @@ class NativeReactor implements Reactor {
         $iterations = ($iterations > 0) ? $iterations : 0;
         $this->alarmIterationMap->attach($alarm, $iterations);
         
-        $subscription = new Subscription($this);
+        $subscription = new Subscription($this->subscriptionEnabler);
         $this->subscriptionAlarmMap->attach($subscription, $alarm);
         $this->alarmSubscriptionMap->attach($alarm, $subscription);
         
@@ -349,7 +353,7 @@ class NativeReactor implements Reactor {
      * @return Subscription Returns a subscription referencing the event
      */
     function onReadable($stream, callable $callback, $timeout = -1) {
-        return $this->subscribe($stream, self::READ, $callback, $timeout);
+        return $this->watchStream($stream, self::READ, $callback, $timeout);
     }
     
     /**
@@ -372,11 +376,11 @@ class NativeReactor implements Reactor {
      * @return Subscription Returns a subscription referencing the event
      */
     function onWritable($stream, callable $callback, $timeout = -1) {
-        return $this->subscribe($stream, self::WRITE, $callback, $timeout);
+        return $this->watchStream($stream, self::WRITE, $callback, $timeout);
     }
     
-    private function subscribe($stream, $flag, callable $callback, $timeout) {
-        $subscription = new Subscription($this);
+    private function watchStream($stream, $flag, callable $callback, $timeout) {
+        $subscription = new Subscription($this->subscriptionEnabler);
         $this->mapStreamSubscription($subscription, $stream, $flag, $callback, $timeout);
         return $subscription;
     }
@@ -463,14 +467,21 @@ class NativeReactor implements Reactor {
         }
     }
     
-    /**
-     * Enable a previously disabled event/stream subscription
-     * 
-     * @param Subscription $subscription
-     * @throws \RuntimeException If the subscription has previously been cancelled
-     * @return void
-     */
-    function enable(Subscription $subscription) {
+    private function changeSubscriptionStatus(Subscription $subscription, $newStatus) {
+        switch ($newStatus) {
+            case Subscription::ENABLED:
+                $this->enable($subscription);
+                break;
+            case Subscription::DISABLED:
+                $this->disable($subscription);
+                break;
+            case Subscription::CANCELLED:
+                $this->cancel($subscription);
+                break;
+        }
+    }
+    
+    private function enable(Subscription $subscription) {
         if ($this->streamSubscriptions->contains($subscription)) {
             $streamArr = $this->streamSubscriptions->offsetGet($subscription);
             list($stream, $flag, $callback, $timeout) = $streamArr;
@@ -481,13 +492,7 @@ class NativeReactor implements Reactor {
         }
     }
     
-    /**
-     * Temporarily disable an active event or stream subscription
-     * 
-     * @param Subscription $subscription
-     * @return void
-     */
-    function disable(Subscription $subscription) {
+    private function disable(Subscription $subscription) {
         if ($this->streamSubscriptions->contains($subscription)) {
             $this->unmapStreamSubscription($subscription);
         } elseif ($this->subscriptionAlarmMap->contains($subscription)) {
@@ -496,13 +501,7 @@ class NativeReactor implements Reactor {
         }
     }
     
-    /**
-     * Permanently cancel an event or stream subscription
-     * 
-     * @param Subscription $subscription
-     * @return void
-     */
-    function cancel(Subscription $subscription) {
+    private function cancel(Subscription $subscription) {
         $this->disable($subscription);
         $this->streamSubscriptions->detach($subscription);
         $this->subscriptionAlarmMap->detach($subscription);

@@ -13,6 +13,7 @@ class LibeventReactor implements Reactor {
     private $subscriptions;
     private $repeatIterationMap;
     private $resolution = self::MICRO_RESOLUTION;
+    private $subscriptionEnabler;
     private $enableOnStartQueue = [];
     private $garbage = [];
     private $garbageCollectionEvent;
@@ -24,6 +25,10 @@ class LibeventReactor implements Reactor {
         $this->eventBase = event_base_new();
         $this->subscriptions = new \SplObjectStorage;
         $this->repeatIterationMap = new \SplObjectStorage;
+        
+        $this->subscriptionEnabler = function(Subscription $subscription, $newStatus) {
+            $this->changeSubscriptionStatus($subscription, $newStatus);
+        };
         
         $this->garbageCollectionEvent = $gcEvent = event_new();
         event_timer_set($gcEvent, [$this, 'collectGarbage']);
@@ -118,26 +123,14 @@ class LibeventReactor implements Reactor {
      * Schedule a callback for immediate invocation in the next event loop iteration
      * 
      * Callbacks scheduled using this method are not associated with an event subscription and
-     * cannot be cancelled or disabled once assigned. They will be executed as soon as possible
-     * after the current event loop iteration completes barring an exception or stop call.
+     * cannot be cancelled or disabled prior to invocation. They will be executed as soon as 
+     * possible after the current event loop iteration completes barring an exception or stop call.
      * 
      * @param callable $callback Any valid PHP callable
      * @return void
      */
     function immediately(callable $callback) {
-        $wrapper = function() use ($callback) {
-            try {
-                $callback();
-            } catch (\Exception $e) {
-                $this->stopException = $e;
-                $this->stop();
-            }
-        };
-        
-        $event = event_new();
-        event_timer_set($event, $wrapper);
-        event_base_set($event, $this->eventBase);
-        event_add($event, $delay = 0);
+        $this->once($callback, $delay = 0);
     }
     
     /**
@@ -154,7 +147,7 @@ class LibeventReactor implements Reactor {
         $event = event_new();
         $delay = ($delay > 0) ? ($delay * $this->resolution) : 0;
         
-        $subscription = new Subscription($this);
+        $subscription = new Subscription($this->subscriptionEnabler);
         $wrapper = function() use ($callback, $subscription) {
             $this->cancel($subscription);
             
@@ -201,7 +194,7 @@ class LibeventReactor implements Reactor {
         $event = event_new();
         $delay = ($delay > 0) ? ($delay * $this->resolution) : 0;
         
-        $subscription = new Subscription($this);
+        $subscription = new Subscription($this->subscriptionEnabler);
         $iterations = filter_var($iterations, FILTER_VALIDATE_INT, ['options' => [
             'min_range' => 0,
             'default' => 0
@@ -312,59 +305,43 @@ class LibeventReactor implements Reactor {
         event_base_set($event, $this->eventBase);
         event_add($event, $timeout);
         
-        $subscription = new Subscription($this);
+        $subscription = new Subscription($this->subscriptionEnabler);
         $this->subscriptions->attach($subscription, [$event, $timeout, $wrapper]);
         
         return $subscription;
     }
     
-    /**
-     * Enable a previously disabled event/stream subscription
-     * 
-     * @param Subscription $subscription
-     * @throws \RuntimeException If the subscription has previously been cancelled
-     * @return void
-     */
-    function enable(Subscription $subscription) {
-        if ($subscription->isCancelled()) {
-            throw new \RuntimeException(
-                'Cannot reenable a previously-cancelled subscription'
-            );
-        } elseif ($this->subscriptions->contains($subscription)) {
-            list($event, $interval) = $this->subscriptions->offsetGet($subscription);
-            event_add($event, $interval);
+    private function changeSubscriptionStatus(Subscription $subscription, $newStatus) {
+        switch ($newStatus) {
+            case Subscription::ENABLED:
+                $this->enable($subscription);
+                break;
+            case Subscription::DISABLED:
+                $this->disable($subscription);
+                break;
+            case Subscription::CANCELLED:
+                $this->cancel($subscription);
+                break;
         }
     }
     
-    /**
-     * Temporarily disable an active event or stream subscription
-     * 
-     * @param Subscription $subscription
-     * @return void
-     */
-    function disable(Subscription $subscription) {
-        if ($this->subscriptions->contains($subscription)) {
-            $event = $this->subscriptions->offsetGet($subscription)[0];
-            event_del($event);
-        }
+    private function enable(Subscription $subscription) {
+        list($event, $interval) = $this->subscriptions->offsetGet($subscription);
+        event_add($event, $interval);
     }
     
-    /**
-     * Permanently cancel an event or stream subscription
-     * 
-     * @param Subscription $subscription
-     * @return void
-     */
-    function cancel(Subscription $subscription) {
-        if ($this->subscriptions->contains($subscription)) {
-            $this->garbage[] = $subscriptionArr = $this->subscriptions->offsetGet($subscription);
-            $event = $subscriptionArr[0];
-            event_del($event);
-            
-            $this->subscriptions->detach($subscription);
-            $this->repeatIterationMap->detach($subscription);
-            $this->scheduleGarbageCollection();
-        }
+    private function disable(Subscription $subscription) {
+        $event = $this->subscriptions->offsetGet($subscription)[0];
+        event_del($event);
+    }
+    
+    private function cancel(Subscription $subscription) {
+        $this->garbage[] = $subscriptionArr = $this->subscriptions->offsetGet($subscription);
+        $event = $subscriptionArr[0];
+        event_del($event);
+        $this->subscriptions->detach($subscription);
+        $this->repeatIterationMap->detach($subscription);
+        $this->scheduleGarbageCollection();
     }
     
     private function scheduleGarbageCollection() {

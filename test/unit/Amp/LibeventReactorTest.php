@@ -12,6 +12,87 @@ class LibeventReactorTest extends PHPUnit_Framework_TestCase {
         }
     }
     
+    function testEnablingSubscriptionAllowsSubsequentInvocation() {
+        $this->skipIfMissingExtLibevent();
+        $reactor = new LibeventReactor;
+        $testIncrement = 0;
+        
+        $subscription = $reactor->once(function() use (&$testIncrement) {
+            $testIncrement++;
+        }, $delay = 0);
+        
+        $subscription->disable();
+        
+        $reactor->once(function() use ($reactor) {
+            $reactor->stop();
+        }, $delay = 0.01);
+        
+        $reactor->run();
+        $this->assertEquals(0, $testIncrement);
+        
+        $subscription->enable();
+        $reactor->once(function() use ($reactor) {
+            $reactor->stop();
+        }, $delay = 0.01);
+        
+        $reactor->run();
+        $this->assertEquals(1, $testIncrement);
+    }
+    
+    function testDisablingSubscriptionPreventsSubsequentInvocation() {
+        $this->skipIfMissingExtLibevent();
+        $reactor = new LibeventReactor;
+        $testIncrement = 0;
+        
+        $subscription = $reactor->once(function() use (&$testIncrement) {
+            $testIncrement++;
+        }, $delay = 0);
+        
+        $subscription->disable();
+        
+        $reactor->once(function() use ($reactor) {
+            $reactor->stop();
+        }, $delay = 0.01);
+        
+        $reactor->run();
+        $this->assertEquals(0, $testIncrement);
+    }
+    
+    function testUnresolvedEventsAreReenabledOnRunFollowingPreviousStop() {
+        $this->skipIfMissingExtLibevent();
+        $reactor = new LibeventReactor;
+        $testIncrement = 0;
+        
+        $reactor->once(function() use (&$testIncrement, $reactor) {
+            $testIncrement++;
+            $reactor->stop();
+        }, $delay = 0.1);
+        
+        $reactor->immediately(function() use ($reactor) {
+            $reactor->stop();
+        });
+        
+        $reactor->run();
+        $this->assertEquals(0, $testIncrement);
+        usleep(150000);
+        $reactor->run();
+        $this->assertEquals(1, $testIncrement);
+    }
+    
+    function testImmediateExecution() {
+        $this->skipIfMissingExtLibevent();
+        $reactor = new LibeventReactor;
+        
+        $testIncrement = 0;
+        
+        $reactor->immediately(function() use (&$testIncrement) {
+            $testIncrement++;
+        });
+        $reactor->tick();
+        
+        $this->assertEquals(1, $testIncrement);
+    }
+    
     function testTickExecutesReadyEvents() {
         $this->skipIfMissingExtLibevent();
         $reactor = new LibeventReactor;

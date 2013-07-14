@@ -8,11 +8,11 @@ class Subscription {
     const DISABLED = 0;
     const CANCELLED = -1;
     
-    private $reactor;
+    private $enabler;
     private $status = self::ENABLED;
     
-    function __construct(Reactor $reactor) {
-        $this->reactor = $reactor;
+    function __construct(\Closure $enabler) {
+        $this->enabler = $enabler;
     }
     
     /**
@@ -25,7 +25,8 @@ class Subscription {
      */
     function enable() {
         if ($this->status === self::DISABLED) {
-            $this->reactor->enable($this);
+            $enabler = $this->enabler;
+            $enabler($this, self::ENABLED);
             $this->status = self::ENABLED;
         } elseif ($this->status === self::CANCELLED) {
             throw new \RuntimeException(
@@ -41,7 +42,8 @@ class Subscription {
      */
     function disable() {
         if ($this->status === self::ENABLED) {
-            $this->reactor->disable($this);
+            $enabler = $this->enabler;
+            $enabler($this, self::DISABLED);
             $this->status = self::DISABLED;
         }
     }
@@ -55,7 +57,8 @@ class Subscription {
      */
     function cancel() {
         if ($this->status !== self::CANCELLED) {
-            $this->reactor->cancel($this);
+            $enabler = $this->enabler;
+            $enabler($this, self::CANCELLED);
             $this->status = self::CANCELLED;
         }
     }
@@ -86,4 +89,5 @@ class Subscription {
     function isCancelled() {
         return ($this->status === self::CANCELLED);
     }
+
 }

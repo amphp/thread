@@ -67,27 +67,6 @@ interface Reactor extends Observable {
     function onWritable($stream, callable $callback, $timeout = -1);
     
     /**
-     * Enable a previously disabled event/stream subscription
-     * 
-     * @param Subscription $subscription
-     */
-    function enable(Subscription $subscription);
-    
-    /**
-     * Temporarily disable an active event or stream subscription
-     * 
-     * @param Subscription $subscription
-     */
-    function disable(Subscription $subscription);
-    
-    /**
-     * Permanently cancel an event or stream subscription
-     * 
-     * @param Subscription $subscription
-     */
-    function cancel(Subscription $subscription);
-    
-    /**
      * Is the calling context executing inside the event loop?
      */
     function isRunning();

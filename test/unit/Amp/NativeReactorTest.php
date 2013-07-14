@@ -4,7 +4,20 @@ use Amp\NativeReactor;
 
 class NativeReactorTest extends PHPUnit_Framework_TestCase {
     
-    function testSubscriptionTimeoutDoesNotAffectSubscriptionsWithoutTimeouts() {
+    function testImmediateExecution() {
+        $reactor = new NativeReactor;
+        
+        $testIncrement = 0;
+        
+        $reactor->immediately(function() use (&$testIncrement) {
+            $testIncrement++;
+        });
+        $reactor->tick();
+        
+        $this->assertEquals(1, $testIncrement);
+    }
+    
+    function testSubscriptionTimeoutDoesNotAffectSubscriptionsThatDontHaveTimeouts() {
         $reactor = new NativeReactor;
         
         $stream = STDIN;
