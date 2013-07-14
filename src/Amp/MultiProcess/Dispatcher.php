@@ -144,11 +144,7 @@ class Dispatcher {
      * @return string Returns the task's call ID
      */
     function call(callable $onResult, $procedure, $workload = NULL) {
-        if (!$this->reactor->isRunning()) {
-            throw new \RuntimeException(
-                'Cannot dispatch calls; the event reactor is not running'
-            );
-        } elseif (!$this->isStarted) {
+        if (!$this->isStarted) {
             $this->start();
         }
         
