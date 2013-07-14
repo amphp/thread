@@ -1,9 +1,9 @@
 <?php
 
-use Amp\NativeSubscription,
+use Amp\Subscription,
     Amp\NativeReactor;
 
-class NativeSubscriptionTest extends PHPUnit_Framework_TestCase {
+class SubscriptionTest extends PHPUnit_Framework_TestCase {
     
     function testEnableAllowsExecution() {
         $counter = 0;
@@ -58,6 +58,7 @@ class NativeSubscriptionTest extends PHPUnit_Framework_TestCase {
         
         $reactor->run();
         
+        $this->assertTrue($subscription->isDisabled());
         $this->assertSame($counter, 0);
     }
     
@@ -79,6 +80,7 @@ class NativeSubscriptionTest extends PHPUnit_Framework_TestCase {
         
         $reactor->run();
         
+        $this->assertTrue($subscription->isCancelled());
         $this->assertSame($counter, 0);
     }
     

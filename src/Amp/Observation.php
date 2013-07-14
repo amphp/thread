@@ -41,6 +41,7 @@ class Observation {
     
     function cancel() {
         $this->subject->removeObserver($this);
+        $this->isEnabled = FALSE;
     }
     
     function modify(array $observerCallbacks) {

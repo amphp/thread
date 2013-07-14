@@ -94,13 +94,10 @@ class NativeReactor implements Reactor {
         
         if ($timeToNextAlarm <= 0) {
             $sec = $usec = 0;
-        } elseif (strstr($timeToNextAlarm, '.')) {
-            list($sec, $usec) = explode('.', $timeToNextAlarm);
-            $sec = (int) $sec;
-            $usec = $usec * 100;
         } else {
-            $sec = (int) $timeToNextAlarm;
-            $usec = 0;
+            $parts = explode('.', $timeToNextAlarm);
+            $sec = (int) $parts[0];
+            $usec = isset($parts[1]) ? ($parts[1] * 100) : 0;
         }
         
         if ($this->readStreams || $this->writeStreams) {
