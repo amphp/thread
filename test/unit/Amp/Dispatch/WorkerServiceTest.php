@@ -1,11 +1,11 @@
 <?php
 
-use Amp\Dispatch\Process\WorkerService,
-    Amp\Dispatch\Process\FrameParser,
-    Amp\Dispatch\Process\FrameWriter,
-    Amp\Dispatch\Process\Frame,
-    Amp\Dispatch\Process\Dispatcher,
-    Amp\Dispatch\Process\ResourceException;
+use Amp\Dispatch\WorkerService,
+    Amp\Dispatch\FrameParser,
+    Amp\Dispatch\FrameWriter,
+    Amp\Dispatch\Frame,
+    Amp\Dispatch\Dispatcher,
+    Amp\Dispatch\ResourceException;
 
 class WorkerServiceTest extends PHPUnit_Framework_TestCase {
     
@@ -73,7 +73,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
     }
     
     /**
-     * @expectedException Amp\Dispatch\Process\ResourceException
+     * @expectedException Amp\Dispatch\ResourceException
      */
     function testOnReadableThrowsExceptionOnBrokenWritePipe() {
         $callId = pack('N', 123456);
@@ -89,7 +89,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         rewind($inputStream);
         
         $parser = new FrameParser($inputStream);
-        $writer = $this->getMock('Amp\Dispatch\Process\FrameWriter', NULL, ['writeAll']);
+        $writer = $this->getMock('Amp\Dispatch\FrameWriter', NULL, ['writeAll']);
         $writer->expects($this->any())
                ->method('writeAll')
                ->will($this->throwException(new ResourceException));

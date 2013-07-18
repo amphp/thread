@@ -1,9 +1,9 @@
 <?php
 
 use Amp\ReactorFactory,
-    Amp\Dispatch\Process\FrameParser,
-    Amp\Dispatch\Process\FrameWriter,
-    Amp\Dispatch\Process\WorkerService;
+    Amp\Dispatch\FrameParser,
+    Amp\Dispatch\FrameWriter,
+    Amp\Dispatch\WorkerService;
 
 date_default_timezone_set(ini_get('date.timezone') ?: 'UTC');
 

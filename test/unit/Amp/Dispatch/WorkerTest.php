@@ -1,12 +1,12 @@
 <?php
 
-use Amp\Dispatch\Process\Worker;
+use Amp\Dispatch\Worker;
 
 class WorkerTest extends PHPUnit_Framework_TestCase {
 
     function testWorkerSpawnsSubProcess() {
         $worker = new Worker(PHP_BINARY);
-        $this->assertInstanceOf('Amp\Dispatch\Process\Worker', $worker);
+        $this->assertInstanceOf('Amp\Dispatch\Worker', $worker);
         $this->assertFalse(getmypid() == $worker->getStatus()['pid']);
         
         return $worker;

@@ -1,7 +1,7 @@
 <?php
 
-use Amp\Dispatch\Process\Frame,
-    Amp\Dispatch\Process\FrameParser;
+use Amp\Dispatch\Frame,
+    Amp\Dispatch\FrameParser;
 
 class FrameParserTest extends PHPUnit_Framework_TestCase {
     

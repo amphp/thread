@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Dispatch\Process;
+namespace Amp\Dispatch;
 
 class WorkerService {
     
@@ -12,8 +12,8 @@ class WorkerService {
     function __construct(FrameParser $parser, FrameWriter $writer) {
         $this->parser = $parser;
         $this->writer = $writer;
-        $this->chrResultCode = chr(Dispatcher::CALL_RESULT);
-        $this->chrErrorCode  = chr(Dispatcher::CALL_ERROR);
+        $this->chrResultCode = chr(BinaryDispatcher::CALL_RESULT);
+        $this->chrErrorCode  = chr(BinaryDispatcher::CALL_ERROR);
         
         $parser->throwOnEof(FALSE);
     }

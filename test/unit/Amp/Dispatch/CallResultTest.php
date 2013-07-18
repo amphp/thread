@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Dispatch\Process\CallResult;
+use Amp\Dispatch\CallResult;
 
 class CallResultTest extends PHPUnit_Framework_TestCase {
     

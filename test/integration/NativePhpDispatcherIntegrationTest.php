@@ -1,11 +1,11 @@
 <?php
 
 use Amp\NativeReactor,
-    Amp\Dispatch\Process\PhpDispatcher,
-    Amp\Dispatch\Process\CallResult,
-    Amp\Dispatch\Process\ResourceException,
-    Amp\Dispatch\Process\WorkerSession,
-    Amp\Dispatch\Process\WorkerSessionFactory;
+    Amp\Dispatch\PhpDispatcher,
+    Amp\Dispatch\CallResult,
+    Amp\Dispatch\ResourceException,
+    Amp\Dispatch\WorkerSession,
+    Amp\Dispatch\WorkerSessionFactory;
 
 class NativePhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
@@ -63,7 +63,7 @@ class NativePhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
         
         $onResult = function(CallResult $callResult) use ($reactor) {
             $this->assertTrue($callResult->isError());
-            $this->assertInstanceOf('Amp\Dispatch\Process\TimeoutException', $callResult->getError());
+            $this->assertInstanceOf('Amp\Dispatch\TimeoutException', $callResult->getError());
             $reactor->stop();
         };
         
@@ -115,7 +115,7 @@ class NativePhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
         
         $onResult = function(CallResult $callResult) use ($reactor) {
             $this->assertTrue($callResult->isError());
-            $this->assertInstanceOf('Amp\Dispatch\Process\WorkerException', $callResult->getError());
+            $this->assertInstanceOf('Amp\Dispatch\WorkerException', $callResult->getError());
             $reactor->stop();
         };
         

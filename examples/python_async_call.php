@@ -1,15 +1,15 @@
 <?php
 
-use Amp\Dispatch\Process\Dispatcher,
-    Amp\Dispatch\Process\CallResult,
-    Amp\Watch\ReactorFactory;
+use Amp\Dispatch\BinaryDispatcher,
+    Amp\Dispatch\CallResult,
+    Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';
 
 $workerCmd = '/usr/bin/python ' . __DIR__ . '/support/python_async_demo.py';
 
 $reactor = (new ReactorFactory)->select();
-$dispatcher = new Dispatcher($reactor, $workerCmd, $workerProcessesToSpawn = 1);
+$dispatcher = new BinaryDispatcher($reactor, $workerCmd, $workerProcessesToSpawn = 1);
 
 $lastResult;
 

@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Dispatch\Process;
+namespace Amp\Dispatch;
 
 class WorkerSession {
     

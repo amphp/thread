@@ -1,10 +1,10 @@
 <?php
 
-namespace Amp\Dispatch\Process;
+namespace Amp\Dispatch;
 
 use Amp\Reactor;
 
-class Dispatcher {
+class BinaryDispatcher implements Dispatcher {
     
     const CALL = 1;
     const CALL_RESULT = 2;
@@ -371,4 +371,3 @@ class Dispatcher {
     }
     
 }
-

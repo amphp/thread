@@ -15,7 +15,7 @@ define('RUN_TIME', 3);
 
 // Native event reactor test ---------------------------------------------------------------------->
 
-$reactor = new Amp\Watch\NativeReactor;
+$reactor = new Amp\NativeReactor;
 $nativeCount = 0;
 $nativeCounter = function() use (&$nativeCount) { $nativeCount++; };
 $reactor->schedule($nativeCounter, $delay = 0, $iterations = -1);
@@ -30,7 +30,7 @@ echo "DONE.\n";
 // Libevent reactor test -------------------------------------------------------------------------->
 
 if (extension_loaded('libevent')) {
-    $reactor = new Amp\Watch\LibeventReactor;
+    $reactor = new Amp\LibeventReactor;
     $libeventCount = 0;
     $libeventCounter = function() use (&$libeventCount) { $libeventCount++; };
     $reactor->schedule($libeventCounter, $delay = 0, $iterations = -1);

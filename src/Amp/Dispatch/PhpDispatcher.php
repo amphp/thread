@@ -1,10 +1,10 @@
 <?php
 
-namespace Amp\Dispatch\Process;
+namespace Amp\Dispatch;
 
 use Amp\Reactor;
 
-class PhpDispatcher extends Dispatcher {
+class PhpDispatcher extends BinaryDispatcher {
     
     /**
      * Normalizes and validates PHP worker commands and allows automatic result unserialization
@@ -35,7 +35,7 @@ class PhpDispatcher extends Dispatcher {
         if ($ini = get_cfg_var('cfg_file_path')) {
             $cmd[] = "-c $ini";
         }
-        $cmd[] = dirname(dirname(dirname(dirname(__DIR__)))) . '/workers/php/worker.php';
+        $cmd[] = dirname(dirname(dirname(__DIR__))) . '/workers/php/worker.php';
         
         if ($workerCmd) {
             $cmd[] = $workerCmd;

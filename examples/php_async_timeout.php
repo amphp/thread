@@ -10,10 +10,10 @@
  * expensive operation. It's preferable to fix the cause of the timeout instead.
  */
 
-use Amp\Dispatch\Process\PhpDispatcher,
-    Amp\Dispatch\Process\CallResult,
-    Amp\Dispatch\Process\TimeoutException,
-    Amp\Watch\ReactorFactory;
+use Amp\Dispatch\PhpDispatcher,
+    Amp\Dispatch\CallResult,
+    Amp\Dispatch\TimeoutException,
+    Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';
 

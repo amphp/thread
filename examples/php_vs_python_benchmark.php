@@ -6,9 +6,9 @@
  * functionality.
  */
 
-use Amp\Dispatch\Process\Dispatcher,
-    Amp\Dispatch\Process\PhpDispatcher,
-    Amp\Watch\ReactorFactory;
+use Amp\Dispatch\BinaryDispatcher,
+    Amp\Dispatch\PhpDispatcher,
+    Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';
 
@@ -18,7 +18,7 @@ define('RUN_TIME', 5);
 
 $reactor = (new ReactorFactory)->select();
 $workerCmd = '/usr/bin/python ' . __DIR__ . '/support/python_len_benchmark.py';
-$pythonDispatcher = new Dispatcher($reactor, $workerCmd, $workerProcessesToSpawn = 1);
+$pythonDispatcher = new BinaryDispatcher($reactor, $workerCmd, $workerProcessesToSpawn = 1);
 
 $pythonCount = 0;
 $pythonOnResult = function() use (&$pythonCount) {

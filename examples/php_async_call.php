@@ -1,8 +1,8 @@
 <?php
 
-use Amp\Dispatch\Process\PhpDispatcher,
-    Amp\Dispatch\Process\CallResult,
-    Amp\Watch\ReactorFactory;
+use Amp\Dispatch\PhpDispatcher,
+    Amp\Dispatch\CallResult,
+    Amp\ReactorFactory;
 
 require dirname(__DIR__) . '/autoload.php';
 
