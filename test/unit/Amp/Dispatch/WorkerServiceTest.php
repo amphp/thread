@@ -4,7 +4,7 @@ use Amp\Dispatch\WorkerService,
     Amp\Dispatch\FrameParser,
     Amp\Dispatch\FrameWriter,
     Amp\Dispatch\Frame,
-    Amp\Dispatch\Dispatcher,
+    Amp\Dispatch\BinaryDispatcher,
     Amp\Dispatch\ResourceException;
 
 class WorkerServiceTest extends PHPUnit_Framework_TestCase {
@@ -17,7 +17,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         $workload = serialize([str_repeat('.', $len)]);
         $procedure = 'strlen';
         $procLen = chr(strlen($procedure));
-        $payload = $callId . chr(Dispatcher::CALL) . $procLen . $procedure . $workload;
+        $payload = $callId . chr(BinaryDispatcher::CALL) . $procLen . $procedure . $workload;
         $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
         
         $inputStream = fopen('php://memory', 'r+');
@@ -39,7 +39,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         
         $this->assertEquals($callId, substr($payload, 0, 4));
         $this->assertEquals($len, unserialize(substr($payload, 5)));
-        $this->assertEquals(ord($payload[4]), Dispatcher::CALL_RESULT);
+        $this->assertEquals(ord($payload[4]), BinaryDispatcher::CALL_RESULT);
     }
     
     function testOnReadableReturnsCallErrorOnInvalidProcedureReturnType() {
@@ -48,7 +48,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         
         $procedure = 'invalidReturnTestFunc';
         $procLen = chr(strlen($procedure));
-        $payload = $callId . chr(Dispatcher::CALL) . $procLen . $procedure;
+        $payload = $callId . chr(BinaryDispatcher::CALL) . $procLen . $procedure;
         $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
         
         $inputStream = fopen('php://memory', 'r+');
@@ -69,7 +69,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         list($isFin, $rsv, $opcode, $payload) = $frameArr;
         
         $this->assertEquals($callId, substr($payload, 0, 4));
-        $this->assertEquals(ord($payload[4]), Dispatcher::CALL_ERROR);
+        $this->assertEquals(ord($payload[4]), BinaryDispatcher::CALL_ERROR);
     }
     
     /**
@@ -81,7 +81,7 @@ class WorkerServiceTest extends PHPUnit_Framework_TestCase {
         $procedure = 'strlen';
         $workload = serialize('test');
         $procLen = chr(strlen($procedure));
-        $payload = $callId . chr(Dispatcher::CALL) . $procLen . $procedure . $workload;
+        $payload = $callId . chr(BinaryDispatcher::CALL) . $procLen . $procedure . $workload;
         $callFrame = new Frame($fin = 1, $rsv = 0, $opcode = Frame::OP_DATA, $payload);
         
         $inputStream = fopen('php://memory', 'r+');

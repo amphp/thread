@@ -6,14 +6,18 @@ use Amp\Reactor;
 
 class PhpDispatcher extends BinaryDispatcher {
     
+    private $workerScript;
+    
     /**
      * Normalizes and validates PHP worker commands and allows automatic result unserialization
      */
-    function __construct(Reactor $reactor, $workerCmd, $poolSize = 1, WorkerSessionFactory $wsf = NULL) {
+    function __construct(Reactor $reactor, $workerCmd = '', $poolSize = 1, WorkerSessionFactory $wsf = NULL) {
         $workerCmd = trim($workerCmd);
         
+        $workerScript = dirname(dirname(dirname(__DIR__))) . '/workers/php/worker.php';
+        
         if (!$workerCmd || (file_exists($workerCmd) && is_readable($workerCmd))) {
-            $workerCmd = $this->buildWorkerCmdFromFunctionFile($workerCmd);
+            $workerCmd = $this->buildWorkerCmdFromFunctionFile($workerScript, $workerCmd);
         } else {
             throw new \InvalidArgumentException(
                 'Async function file does not exist: ' . $workerCmd
@@ -25,7 +29,7 @@ class PhpDispatcher extends BinaryDispatcher {
         parent::__construct($reactor, $workerCmd, $poolSize, $wsf, $crf);
     }
     
-    private function buildWorkerCmdFromFunctionFile($workerCmd) {
+    private function buildWorkerCmdFromFunctionFile($workerScript, $workerCmd) {
         if ($workerCmd) {
             $this->validateWorkerLint($workerCmd);
         }
@@ -35,7 +39,7 @@ class PhpDispatcher extends BinaryDispatcher {
         if ($ini = get_cfg_var('cfg_file_path')) {
             $cmd[] = "-c $ini";
         }
-        $cmd[] = dirname(dirname(dirname(__DIR__))) . '/workers/php/worker.php';
+        $cmd[] = $workerScript;
         
         if ($workerCmd) {
             $cmd[] = $workerCmd;
@@ -47,12 +51,13 @@ class PhpDispatcher extends BinaryDispatcher {
     private function validateWorkerLint($workerCmd) {
         $cmd = PHP_BINARY . ' -l ' . $workerCmd . '  && exit';
         exec($cmd, $outputLines, $exitCode);
-        
+        // @codeCoverageIgnoreStart
         if ($exitCode) {
             throw new \RuntimeException(
                 "Worker lint validation failed: " . PHP_EOL . implode(PHP_EOL, $outputLines)
             );
         }
+        // @codeCoverageIgnoreEnd
     }
     
     /**

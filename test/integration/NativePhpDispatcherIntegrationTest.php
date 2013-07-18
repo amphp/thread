@@ -15,7 +15,6 @@ class NativePhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
         $reactor = new NativeReactor;
         $dispatcher = new PhpDispatcher($reactor, $functions);
         $dispatcher->setCallTimeout(1);
-        $dispatcher->setGranularity(1);
         $dispatcher->start();
         
         // cover repeated start
@@ -38,7 +37,6 @@ class NativePhpDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
         
         $reactor = new NativeReactor;
         $dispatcher = new PhpDispatcher($reactor, $functions);
-        $dispatcher->setGranularity(1);
         $dispatcher->start();
         
         $onResult = function(CallResult $callResult) use ($reactor) {
