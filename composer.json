@@ -1,14 +1,14 @@
 {
   "name": "rdlowrey/amp",
   "homepage": "https://github.com/rdlowrey/Amp",
-  "description": "An event reactor + asynchronous concurrency framework for event-driven PHP applications.",
-  "keywords": ["parallel", "events", "libevent", "concurrency"],
+  "description": "Asynchronous Messaging for PHP (AMP) event-driven servers and applications.",
+  "keywords": ["parallel", "events", "libevent", "concurrency", "async"],
   "license": "MIT",
   "authors": [
     {
       "name": "Daniel Lowrey",
       "email": "rdlowrey@gmail.com",
-      "role": "Creator / Main Developer"
+      "role": "Creator / Lead Developer"
     }
   ],
   "require": {
