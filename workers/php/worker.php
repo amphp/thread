@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Watch\ReactorFactory,
+use Amp\ReactorFactory,
     Amp\Dispatch\Process\FrameParser,
     Amp\Dispatch\Process\FrameWriter,
     Amp\Dispatch\Process\WorkerService;

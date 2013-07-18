@@ -2,7 +2,7 @@
 
 namespace Amp\Dispatch\Process;
 
-use Amp\Watch\Reactor;
+use Amp\Reactor;
 
 class PhpDispatcher extends Dispatcher {
     

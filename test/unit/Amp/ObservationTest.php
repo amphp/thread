@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Watch\Observation;
+use Amp\Observation;
 
 class ObservationTest extends PHPUnit_Framework_TestCase {
     
@@ -8,7 +8,7 @@ class ObservationTest extends PHPUnit_Framework_TestCase {
      * @expectedException InvalidArgumentException
      */
     function testConstructorThrowsOnEmptyCallbackArray() {
-        $observable = $this->getMock('Amp\Watch\Observable');
+        $observable = $this->getMock('Amp\Observable');
         $observation = new Observation($observable, $callbacks = []);
     }
     
@@ -16,7 +16,7 @@ class ObservationTest extends PHPUnit_Framework_TestCase {
      * @expectedException InvalidArgumentException
      */
     function testConstructorThrowsOnUncallableListener() {
-        $observable = $this->getMock('Amp\Watch\Observable');
+        $observable = $this->getMock('Amp\Observable');
         $observation = new Observation($observable, $callbacks = [
             'event' => new StdClass
         ]);
@@ -24,7 +24,7 @@ class ObservationTest extends PHPUnit_Framework_TestCase {
     
     function testInvokeNotifiesObservationListener() {
         $mutable = 99;
-        $observable = $this->getMock('Amp\Watch\Observable');
+        $observable = $this->getMock('Amp\Observable');
         $observation = new Observation($observable, $callbacks = [
             'event' => function($val) use (&$mutable) { $mutable = $val; }
         ]);
@@ -36,7 +36,7 @@ class ObservationTest extends PHPUnit_Framework_TestCase {
     
     function testDisablePreventsEventObservation() {
         $mutable = 99;
-        $observable = $this->getMock('Amp\Watch\Observable');
+        $observable = $this->getMock('Amp\Observable');
         $observation = new Observation($observable, $callbacks = [
             'event' => function($val) use (&$mutable) { $mutable = $val; }
         ]);
@@ -53,7 +53,7 @@ class ObservationTest extends PHPUnit_Framework_TestCase {
     
     function testCancelPreventsEventObservation() {
         $mutable = 99;
-        $observable = $this->getMock('Amp\Watch\Observable');
+        $observable = $this->getMock('Amp\Observable');
         $observation = new Observation($observable, $callbacks = [
             'event' => function($val) use (&$mutable) { $mutable = $val; }
         ]);
@@ -64,7 +64,7 @@ class ObservationTest extends PHPUnit_Framework_TestCase {
     
     function testModifyChangesCallbacks() {
         $mutable = 99;
-        $observable = $this->getMock('Amp\Watch\Observable');
+        $observable = $this->getMock('Amp\Observable');
         $observation = new Observation($observable, $callbacks = [
             'event' => function($val) use (&$mutable) { $mutable = $val; }
         ]);
@@ -82,7 +82,7 @@ class ObservationTest extends PHPUnit_Framework_TestCase {
     
     function testReplaceChangesCallbacks() {
         $mutable = 99;
-        $observable = $this->getMock('Amp\Watch\Observable');
+        $observable = $this->getMock('Amp\Observable');
         $observation = new Observation($observable, $callbacks = [
             'event' => function($val) use (&$mutable) { $mutable = $val; }
         ]);

@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Watch\NativeReactor;
+use Amp\NativeReactor;
 
 class NativeReactorTest extends PHPUnit_Framework_TestCase {
     
@@ -95,7 +95,7 @@ class NativeReactorTest extends PHPUnit_Framework_TestCase {
         
         $subscription = $reactor->once(function(){});
         
-        $this->assertInstanceOf('Amp\Watch\Subscription', $subscription);
+        $this->assertInstanceOf('Amp\Subscription', $subscription);
     }
     
     function testReactorDoesntSwallowOnceCallbackException() {
@@ -117,7 +117,7 @@ class NativeReactorTest extends PHPUnit_Framework_TestCase {
         
         $subscription = $reactor->schedule(function(){}, $interval = 1);
         
-        $this->assertInstanceOf('Amp\Watch\Subscription', $subscription);
+        $this->assertInstanceOf('Amp\Subscription', $subscription);
     }
     
     function testReactorDoesntSwallowRepeatCallbackException() {

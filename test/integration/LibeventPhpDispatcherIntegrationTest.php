@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Watch\LibeventReactor,
+use Amp\LibeventReactor,
     Amp\Dispatch\Process\PhpDispatcher,
     Amp\Dispatch\Process\CallResult,
     Amp\Dispatch\Process\ResourceException,

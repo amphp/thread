@@ -1,7 +1,7 @@
 <?php
 
-use Amp\Watch\Subscription,
-    Amp\Watch\NativeReactor;
+use Amp\Subscription,
+    Amp\NativeReactor;
 
 class SubscriptionTest extends PHPUnit_Framework_TestCase {
     

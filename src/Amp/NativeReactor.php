@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Watch;
+namespace Amp;
 
 class NativeReactor implements Reactor {
     

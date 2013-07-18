@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Watch\LibeventReactor;
+use Amp\LibeventReactor;
 
 class LibeventReactorTest extends PHPUnit_Framework_TestCase {
     
@@ -131,7 +131,7 @@ class LibeventReactorTest extends PHPUnit_Framework_TestCase {
         
         $subscription = $reactor->once(function(){});
         
-        $this->assertInstanceOf('Amp\Watch\Subscription', $subscription);
+        $this->assertInstanceOf('Amp\Subscription', $subscription);
     }
     
     /**
@@ -173,7 +173,7 @@ class LibeventReactorTest extends PHPUnit_Framework_TestCase {
         
         $subscription = $reactor->schedule(function(){}, $interval = 1);
         
-        $this->assertInstanceOf('Amp\Watch\Subscription', $subscription);
+        $this->assertInstanceOf('Amp\Subscription', $subscription);
     }
     
     function testCancelRemovesSubscription() {

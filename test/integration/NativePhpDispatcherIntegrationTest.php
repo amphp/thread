@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Watch\NativeReactor,
+use Amp\NativeReactor,
     Amp\Dispatch\Process\PhpDispatcher,
     Amp\Dispatch\Process\CallResult,
     Amp\Dispatch\Process\ResourceException,

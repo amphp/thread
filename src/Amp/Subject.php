@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Watch;
+namespace Amp;
 
 /**
  * Implements the Observable interface allowing objects to accept, manage and notify observers.

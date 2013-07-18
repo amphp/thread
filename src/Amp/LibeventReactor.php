@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Watch;
+namespace Amp;
 
 /**
  * An event reactor utilizing ext/libevent. It's awesome. The End.
@@ -336,12 +336,14 @@ class LibeventReactor implements Reactor {
     }
     
     private function cancel(Subscription $subscription) {
-        $this->garbage[] = $subscriptionArr = $this->subscriptions->offsetGet($subscription);
-        $event = $subscriptionArr[0];
-        event_del($event);
-        $this->subscriptions->detach($subscription);
-        $this->repeatIterationMap->detach($subscription);
-        $this->scheduleGarbageCollection();
+        if ($this->subscriptions->contains($subscription)) {
+            $this->garbage[] = $subscriptionArr = $this->subscriptions->offsetGet($subscription);
+            $event = $subscriptionArr[0];
+            event_del($event);
+            $this->subscriptions->detach($subscription);
+            $this->repeatIterationMap->detach($subscription);
+            $this->scheduleGarbageCollection();
+        }
     }
     
     private function scheduleGarbageCollection() {

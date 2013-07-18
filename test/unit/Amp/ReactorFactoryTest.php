@@ -1,6 +1,6 @@
 <?php
 
-use Amp\Watch\ReactorFactory;
+use Amp\ReactorFactory;
 
 class ReactorFactoryTest extends PHPUnit_Framework_TestCase {
     
@@ -13,11 +13,11 @@ class ReactorFactoryTest extends PHPUnit_Framework_TestCase {
         
         $rf = new ReactorFactory;
         $reactor = $rf->select();
-        $this->assertInstanceOf('Amp\Watch\LibeventReactor', $reactor);
+        $this->assertInstanceOf('Amp\LibeventReactor', $reactor);
     }
     
     function testMagicInvokeDelegatesToSelectMethod() {
-        $rf = $this->getMock('Amp\Watch\ReactorFactory', ['select']);
+        $rf = $this->getMock('Amp\ReactorFactory', ['select']);
         $rf->expects($this->once())
            ->method('select')
            ->will($this->returnValue(42));

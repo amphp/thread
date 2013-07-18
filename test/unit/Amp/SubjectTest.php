@@ -1,7 +1,7 @@
 <?php
 
-use Amp\Watch\Subject,
-    Amp\Watch\Observable;
+use Amp\Subject,
+    Amp\Observable;
 
 class SubjectTest extends PHPUnit_Framework_TestCase {
     
