@@ -1,6 +1,6 @@
 <?php
 
-require dirname(__DIR__) . '/autoload.php'; // <-- Register an autoloader for the AMP libs
+require dirname(__DIR__) . '/autoload.php'; // <-- Register an AMP autoloader
 
 use Amp\Reactor,
     Amp\ReactorFactory,
@@ -36,7 +36,7 @@ class MyParallelProgram {
 }
 
 $reactor    = (new ReactorFactory)->select();
-$dispatcher = new PhpDispatcher($reactor, $addlUserFunctionsFile = '', $processPoolSize = 2);
+$dispatcher = new PhpDispatcher($reactor, $userFuncsFile = '', $processes = 2);
 $program    = new MyParallelProgram($reactor, $dispatcher);
 
 $program->run(); // <-- Won't return control until $reactor->stop() is called
