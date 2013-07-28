@@ -1,17 +1,13 @@
 ## AMP: Asynchronous Multiprocessing for PHP
 
-AMP is an OS-agnostic framework providing event-driven concurrency and non-blocking IO for PHP 
-applications and socket servers. Current evented PHP systems err by requiring non-blocking semantics
-for computational concurrency. *This is a mistake*. The solution to the problem of event-driven
-concurrency is *NOT* to write and require non-blocking versions of *every imaginable PHP function*,
-but instead to create tools allowing evented code to utilize the vast toolkit of synchronous 
-functionality already available to PHP developers.
+AMP parallelizes asynchronous RPC-style function calls to a pool of worker processes inside 
+non-blocking event loops. The OS-agnostic functionality is available in both Windows *and* POSIX
+environments and requires no PHP extensions.
 
-AMP solves this problem by way of its Dispatcher API which allows parallelization of IO operations
-in both Windows *and* POSIX-style environments without the need for additional PHP extensions.
-Dispatchers route RPC-style asynchronous calls to worker process pools with an eye to adding support
-for worker threads and Gearman job servers. Meanwhile, mutable event subscriptions allow
-pausable/resumable events and switching back and forth between evented and synchronous code as needed.
+Current evented PHP libraries require non-blocking semantics for computational concurrency. *This is
+a serious mistake*. The solution to the problem of event-driven concurrency is *NOT* to write and
+require non-blocking versions of *every imaginable PHP function*. Instead, we should allow evented
+code to utilize the vast synchronous toolkit already available to PHP developers.
 
 > **HEY!** Checkout out the [**EXAMPLES**](https://github.com/rdlowrey/Amp/tree/master/examples)
 > to see some of the cool things AMP can do.
@@ -21,20 +17,16 @@ pausable/resumable events and switching back and forth between evented and synch
  - Offers a simple API for parallelizing function calls to a pool of worker processes;
  - Allows RPC-style calls to worker processes in languages that *aren't* PHP via a custom
    inter-process messaging protocol;
- - Integrates both native *AND* libevent reactors for out-of-the-box compatibility with any PHP
-   install on running on any operating system;
- - Provides pause/play functionality for individual event callbacks, recurring timed events,
-   event-loop ticking and the ability to start/stop the reactor at any time without losing state.
+ - Integrates both native *AND* libevent event loop reactors for out-of-the-box compatibility with
+   any PHP install on any operating system;
 
 ###### IN DEVELOPMENT:
 
- - Dispatcher implementation for asynchronously parallelizing tasks to worker threads via PHP's
-   *ext/pthreads* extension.
-
-###### PLANNED:
-
- - Dispatcher implementation for asynchronously parallelizing tasks to Gearman servers using PHP's
-   *ext/gearman* extension.
+ - A lightweight threaded `Dispatcher` implementation to parallelize tasks to worker threads using
+   PHP's [*pthreads*][pthreads] extension.
+ - Socket server implementation for distributing work across different machines or requests in web
+   SAPI environments.
+ - An event reactor utilizing `Libev` via PHP's [*ev*][ev] extension.
 
 ##### PROJECT GOALS
 
@@ -45,8 +37,16 @@ pausable/resumable events and switching back and forth between evented and synch
 
 ##### INSTALLATION
 
+###### Git:
+
 ```bash
 $ git clone https://github.com/rdlowrey/Amp.git
+```
+
+###### Composer:
+
+```bash
+$ php composer.phar require rdlowrey/amp:0.1.*
 ```
 
 ##### REQUIREMENTS
@@ -55,7 +55,10 @@ $ git clone https://github.com/rdlowrey/Amp.git
 
 ###### OPTIONAL:
 
-* *ext/libevent* Required to use the `LibeventReactor`; results in ~3x faster event-loop execution.
+* [*libevent*][libevent] Required to use the `LibeventReactor` for ~3x faster event-loop execution.
 
 
+[pthreads]: http://pecl.php.net/package/pthreads "pthreads"
+[ev]: http://pecl.php.net/package/ev "ev"
 [solid]: http://en.wikipedia.org/wiki/SOLID_(object-oriented_design) "S.O.L.I.D."
+[libevent]: http://pecl.php.net/package/libevent "libevent"
