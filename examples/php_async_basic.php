@@ -39,4 +39,4 @@ $reactor    = (new ReactorFactory)->select();
 $dispatcher = new PhpDispatcher($reactor, $userFuncsFile = '', $processes = 2);
 $program    = new MyParallelProgram($reactor, $dispatcher);
 
-$program->run(); // <-- Won't return control until $reactor->stop() is called
+$program->run(); // <-- Won't return until we call $reactor->stop()
