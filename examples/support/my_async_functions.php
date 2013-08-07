@@ -1,7 +1,11 @@
 <?php
 
 function my_hello_function($name) {
-    return "Hello, $name!";
+    return "Hello, {$name}!";
+}
+
+function my_multi_arg_function($arg1, $arg2) {
+    return [$arg1, $arg2];
 }
 
 function my_error_function() {

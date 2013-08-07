@@ -1,34 +1,29 @@
 from struct import pack, unpack
 from sys import stdin, stdout
 
-OP_DATA     = 0x00
-OP_CLOSE    = 0x0A
-OP_PING     = 0x0B
-CALL        = 1
-CALL_RESULT = 2
-CALL_ERROR  = 3
+OP_DATA_MORE = 0;
+OP_DATA_FIN = 1;
+OP_CLOSE = 2;
+OP_PING = 3;
+OP_PONG = 4;
+
+CALL_REQUEST = 1;
+CALL_CANCEL = 2;
+CALL_RESULT = 3;
+CALL_RESULT_PART = 4;
+CALL_RESULT_ERROR = 5;
 
 class Frame:
     '''
     A value object representing an AMP messaging frame
     '''
     
-    fin = 0
-    rsv = 0
-    opcode = 0x00
+    opcode = 0
     payload = ""
     
-    def __init__(self, fin, rsv, opcode, payload = ""):
-        self.fin = fin
-        self.rsv = rsv
+    def __init__(self, opcode, payload = ""):
         self.opcode = opcode
         self.payload = str(payload)
-    
-    def is_fin(self):
-        return self.fin
-        
-    def get_rsv(self):
-        return self.rsv
         
     def get_opcode(self):
         return self.opcode
@@ -36,12 +31,7 @@ class Frame:
     def get_payload(self):
         return self.payload
     
-    def get_raw_frame(self):
-        first_byte = OP_DATA
-        first_byte |= self.fin << 7
-        first_byte |= self.rsv << 4
-        first_byte |= self.opcode
-        
+    def get_header(self):
         length = len(self.payload)
         
         if (length > 0xFFFF):
@@ -54,10 +44,10 @@ class Frame:
             second_byte = length
             length_body = ""
         
-        return chr(first_byte) + chr(second_byte) + length_body + self.payload;
+        return str(self.opcode) + chr(second_byte) + length_body
     
     def __str__(self):
-        return self.get_raw_frame()
+        return self.get_header() + self.payload
 
 
 def parse(input):
@@ -66,21 +56,14 @@ def parse(input):
     '''
     
     while True:
-        first_byte = input.read(1)
-        
-        if len(first_byte) != 0:
-            first_byte = ord(first_byte)
+        opcode = input.read(1)
+        if len(opcode) != 0:
             break
     
-    fin    = bool(first_byte & 0b10000000)
-    rsv    = (first_byte & 0b01110000) >> 4
-    opcode = (first_byte & 0b00001111)
-    
     while True:
-        length = input.read(1)
-        
-        if len(length) != 0:
-            length = ord(length)
+        length_byte = input.read(1)
+        if len(length_byte) != 0:
+            length = ord(length_byte)
             break
     
     if (length == 254):
@@ -90,8 +73,7 @@ def parse(input):
     
     payload = input.read(length) if length else ""
     
-    return Frame(fin, rsv, opcode, payload)
-
+    return Frame(opcode, payload)
 
 
 def listen(callables):
@@ -103,21 +85,14 @@ def listen(callables):
     
     while (1):
         frame = parse(stdin)
-        opcode = frame.get_opcode()
-        
-        if opcode != OP_DATA:
-            # we don't do anything with non-data opcodes
-            continue
-        
         payload += frame.get_payload()
         
-        if not frame.is_fin():
+        if not int(frame.get_opcode()) == OP_DATA_FIN:
             continue
         
-        call_id = payload[0:4]
-        call_code = ord(payload[4])
-        
-        proc_len   = ord(payload[5]) + 6
+        call_id   = payload[0:4]
+        call_code = payload[4]
+        proc_len  = ord(payload[5]) + 6
         procedure = payload[6:proc_len]
         workload  = payload[proc_len:]
         payload   = ""
@@ -126,16 +101,16 @@ def listen(callables):
             func = callables[procedure]
             
             if callable(func):
-                call_code = chr(CALL_RESULT)
+                call_response_code = str(CALL_RESULT)
                 result = str(func(workload))
             else:
                 raise Exception("Procedure `%s` not implemented" % procedure)
             
         except Exception as e:
-            call_code = chr(CALL_ERROR)
+            call_response_code = str(CALL_RESULT_ERROR)
             result = str(e)
         
-        frame = Frame(1, 0, OP_DATA, call_id + call_code + result)
-        stdout.write(frame.get_raw_frame())
+        frame = Frame(OP_DATA_FIN, call_id + call_response_code + result)
+        stdout.write(frame.get_header() + frame.get_payload())
         stdout.flush()
 
