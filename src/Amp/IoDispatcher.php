@@ -15,7 +15,7 @@ class IoDispatcher extends UnserializedIoDispatcher {
             $workerCmd = $this->buildWorkerCmdFromFunctionFile($userInclude, $workerCmd);
         } else {
             throw new \InvalidArgumentException(
-                "User include file does not exist: {$workerCmd}"
+                "User include file does not exist or is not readable: {$workerCmd}"
             );
         }
         
