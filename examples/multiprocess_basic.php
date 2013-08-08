@@ -1,36 +1,40 @@
 <?php
 
 /**
- * @TODO Explain the demo
+ * This demonstrates the ability to: 
+ *   - run a function immediately when the reactor starts
+ *   - run a function once sometime after starting
+ *   - run a function repeatedly
+ *   - stop the reactor
  */
 
 use Alert\Reactor, Alert\ReactorFactory, Amp\CallResult, Amp\IoDispatcher;
 
 require dirname(__DIR__) . '/autoload.php';
 
+// A callback to receive the results of our asynchronous str_rot13() call
+function onAsyncCallResult(CallResult $callResult) {
+    echo $callResult->isSuccess()
+        ? "str_rot13() result: " . $callResult->getResult() . PHP_EOL
+        : $callResult->getError();
+}
+
 function main(Reactor $reactor, IoDispatcher $dispatcher) {
     
-    // Stop the program after five seconds have elapsed
-    $reactor->once(function() use ($reactor) {
-        $reactor->stop();
-    }, $delayInSeconds = 5);
-    
+    // Dispatch this async call as soon as the program starts
+    $reactor->immediately(function() use ($dispatcher, $onAsyncCallResult) {
+        $dispatcher->call('onAsyncCallResult', 'str_rot13', 'my string');
+    });
+
     // Tick off seconds to demonstrate the asynchronous nature of the program
     $reactor->repeat(function() {
         echo "tick ", time(), PHP_EOL;
     }, $intervalInSeconds = 1);
     
-    // A callback to receive the results of our asynchronous str_rot13() call
-    $onAsyncCallResult = function(CallResult $callResult) {
-        echo $callResult->isSuccess()
-            ? "str_rot13() result: " . $callResult->getResult() . PHP_EOL
-            : $callResult->getError();
-    };
-    
-    // Dispatch this async call as soon as the program starts
-    $reactor->immediately(function() use ($dispatcher, $onAsyncCallResult) {
-        $dispatcher->call($onAsyncCallResult, 'str_rot13', 'my string');
-    });
+    // Stop the program after five seconds have elapsed
+    $reactor->once(function() use ($reactor) {
+        $reactor->stop();
+    }, $delayInSeconds = 5);
     
 }
 
