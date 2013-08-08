@@ -44,11 +44,8 @@ concurrency and distributed processing a reality for PHP coders of any skill lev
 ###### Git:
 
 ```bash
-$ git clone https://github.com/rdlowrey/Amp.git
+$ git clone --recursive https://github.com/rdlowrey/Amp.git
 ```
-###### Manual Download:
-
-Manually download from the [tagged release][tags] section.
 
 ###### Composer:
 
@@ -60,13 +57,12 @@ $ php composer.phar require rdlowrey/amp:0.2.*
 #### REQUIREMENTS
 
 * PHP 5.4+
-* [rdlowrey/alert][alert] event reactor library required
-* *Optional:* [*libevent*][libevent] for faster evented execution and high-volume socket connections
+* [rdlowrey/alert][alert] event reactor library (retrieved automatically with `$ git clone --recursive`)
+* *Optional:* [libevent][libevent] for faster evented execution and high-volume socket connections
 
 
 [pthreads]: http://pecl.php.net/package/pthreads "pthreads"
 [ev]: http://pecl.php.net/package/ev "ev"
 [solid]: http://en.wikipedia.org/wiki/SOLID_(object-oriented_design) "S.O.L.I.D."
 [alert]: https://github.com/rdlowrey/Alert "Alert event reactor"
-[tags]: https://github.com/rdlowrey/Amp/releases "Tagged Releases"
 [libevent]: http://pecl.php.net/package/libevent "libevent"

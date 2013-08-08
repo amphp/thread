@@ -3,7 +3,7 @@ v0.2.0
 
 > **NOTE:** This release introduces significant changes in the AMP API to affect performance and
 > functionality improvements; BC breaks are prevalent and blindly upgrading will break your
-> application.
+> application. v0.1.0 is deprecated and no longer supported.
 
 - Extracted event reactor functionality into separate [Alert][alert-repo] repo
 - Added TCP job server (`bin/amp.php`) and asynchronous clients for interfacing with job servers
