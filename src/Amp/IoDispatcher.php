@@ -44,10 +44,10 @@ class IoDispatcher extends UnserializedIoDispatcher {
         if ($ini = get_cfg_var('cfg_file_path')) {
             $cmd[] = "-c $ini";
         }
-        $cmd[] = $userInclude;
+        $cmd[] = $baseWorkerScript;
 
-        if ($workerCmd) {
-            $cmd[] = $workerCmd;
+        if ($userFunctionFile) {
+            $cmd[] = $userFunctionFile;
         }
 
         return implode(' ', $cmd);
