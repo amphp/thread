@@ -24,7 +24,7 @@ class IoDispatcher extends UnserializedIoDispatcher {
     private function validateUserFunctionFile($userFunctionFile) {
         if (!(file_exists($userFunctionFile) && is_readable($userFunctionFile))) {
             throw new \InvalidArgumentException(
-                "User function file does not exist: {$userFunctionFile}"
+                "User function file does not exist or is not readable: {$userFunctionFile}"
             );
         }
 
