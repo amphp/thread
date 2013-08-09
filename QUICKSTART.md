@@ -169,13 +169,13 @@ $eventReactor->run();
 
 #### So what's going on in that code?
 
-Now let's walk through this code and see what's happening step by step:
+Let's walk through this code and see what's happening step by step:
 
 1. First, we require the class autoloader that comes packaged with AMP. You can use any autoloader
    you like to load AMP classes but the `autoload.php` file is included as a convenience.
 2. We alias the class names we'll reference with a `use` statement to make the code a bit cleaner.
-3. We create the an instance of the `Alert\Reactor` interface. The `Alert\ReactorFactory` class is
-   used to auto-select the most performant event reactor for our system.
+3. We create an instance of the `Alert\Reactor` interface. The `Alert\ReactorFactory` class is used
+   to auto-select the most performant event reactor for our system.
 4. We instantiate the `Amp\JobDispatcher` client class and pass it the event reactor dependency it
    requires to operate. Also, we enable debug output so the dispatcher will tell us what's happening
    in our console while the program runs.
@@ -198,16 +198,21 @@ Now let's walk through this code and see what's happening step by step:
 #### What's *really going on* in that code
 
 The output of the above demo script is itself rather unremarkable. Basically all we did was call
-`sleep(1)` three times with a lot more overhead than would have been required had we simply invoked
-the same function directly without AMP. **But wait ...** if you actually ran the example code in
-your console you would have seen that the program completed in ~1 second. And therein lies the magic
-of parallel processing. Had we called `sleep(1)` three times synchronously in our program it would
-have needed ~3 seconds to complete. Now, telling our CPU to take a nap three times is a spurious use
-of parallelization to be sure; but the larger implication should be clear:
+`sleep(1)` three times but with a lot more overhead than would have been required had we simply
+invoked it three times directly. **But wait ...** if you actually run the example code in the
+console you'll see that although we made three `sleep(1)` calls the program still completed in ~1
+second.
+
+This is the magic of parallel processing. Had we synchronously called `sleep(1)` three times in our
+program it would have needed ~3 seconds to complete. Of course, telling our CPU to take a nap three
+times is a spurious use of parallelization to be sure; but the larger implication should be clear:
 
 > We can use parallel asynchronous calls to execute multiple IO-bound operations (like database
 > queries) at the same time and significantly improve the speed with which we're able to generate
 > the overall result.
+
+Additionally, because the calls to `Amp\JobDispatcher::call()` return immediately we can continue
+doing other things while we wait for our result callbacks to return.
 
 
 ## 5. The tip of the iceberg
@@ -222,6 +227,6 @@ enable and cancel recurring or one-time events as well as watch sockets and stre
 non-blocking servers and applications.
 
 Please take some time to peruse the files in the AMP `examples/` directory as well as the
-[`Alert`][alert-repo] github page.
+[`Alert`][alert-repo] github page to learn more about the possibilities.
 
 [alert-repo]: https://github.com/rdlowrey/Alert "Alert"
