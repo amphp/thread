@@ -1,5 +1,7 @@
 ## AMP: Asynchronous Multiprocessing in PHP
 
+> [**Read the QUICKSTART Guide**][quickstart]
+
 AMP parallelizes asynchronous RPC-style function calls to job servers and worker process pools. Its
 goal is to trivialize distributed PHP processing and failover by eliminating the difficulties of
 threading and non-blocking semantics. AMP's OS-agnostic functionality is available in both Windows
@@ -13,9 +15,6 @@ of non-blocking APIs to accomplish anything. Instead, evented code should have a
 synchronous toolkit already available to PHP developers. AMP allows developers to write synchronous
 functions which are then *executed and returned asynchronously.* This simple approach makes
 concurrency and distributed processing a reality for PHP coders of any skill level.
-
-> **HEY!** Checkout out the [**EXAMPLES**](https://github.com/rdlowrey/Amp/tree/master/examples)
-> to see some of the cool things AMP can do.
 
 
 #### FEATURES
@@ -61,6 +60,7 @@ $ php composer.phar require rdlowrey/amp:0.2.*
 * *Optional:* [libevent][libevent] for faster evented execution and high-volume socket connections
 
 
+[quickstart]: https://github.com/rdlowrey/Amp/blob/master/QUICKSTART.md "AMP QUICKSTART"
 [pthreads]: http://pecl.php.net/package/pthreads "pthreads"
 [ev]: http://pecl.php.net/package/ev "ev"
 [solid]: http://en.wikipedia.org/wiki/SOLID_(object-oriented_design) "S.O.L.I.D."
