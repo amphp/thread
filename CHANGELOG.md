@@ -1,3 +1,8 @@
+#### v0.2.1
+
+- Addressed execution time drift in repeating native reactor alarms
+- Addressed infinite recursion in repeating callbacks
+
 v0.2.0
 ------
 
