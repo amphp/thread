@@ -274,7 +274,9 @@ class UnserializedJobDispatcher implements Dispatcher {
         $onReconnect = $server->onResolution ?: function(){};
         
         if ($secondsUntilRetry) {
-            $reconnect = function() use ($uri) { $this->connectToJobServerAsync($uri, $onReconnect); };
+            $reconnect = function() use ($uri, $onReconnect) {
+                $this->connectToJobServerAsync($uri, $onReconnect);
+            };
             $this->reactor->once($reconnect, $secondsUntilRetry);
         } else {
             $this->connectToJobServerAsync($uri, $onReconnect);
