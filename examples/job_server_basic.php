@@ -23,7 +23,7 @@
  * connections may also be established asynchronously via UnserializedJobDispatcher::connectToJobServerAsync().
  */
 
-require dirname(__DIR__) . '/autoload.php'; // <-- Register an AMP autoloader
+require __DIR__ . '/../vendor/autoload.php';
 
 use Alert\ReactorFactory, Amp\CallResult, Amp\JobDispatcher, Amp\ResourceException;
 

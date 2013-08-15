@@ -6,7 +6,7 @@
 
 use Amp\IoDispatcher, Amp\CallResult, Alert\ReactorFactory;
 
-require dirname(__DIR__) . '/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/support/async_mailer/MyAsyncMailer.php';
 
 $reactor = (new ReactorFactory)->select();

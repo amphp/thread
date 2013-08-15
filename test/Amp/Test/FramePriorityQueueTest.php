@@ -1,8 +1,10 @@
 <?php
 
+namespace Amp\Test;
+
 use Amp\Frame, Amp\FramePriorityQueue;
 
-class FramePriorityQueueTest extends PHPUnit_Framework_TestCase {
+class FramePriorityQueueTest extends \PHPUnit_Framework_TestCase {
 
     function testConstruction() {
         $queue = new FramePriorityQueue;

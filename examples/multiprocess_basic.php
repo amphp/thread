@@ -10,7 +10,7 @@
 
 use Alert\Reactor, Alert\ReactorFactory, Amp\CallResult, Amp\IoDispatcher;
 
-require dirname(__DIR__) . '/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 // A callback to receive the results of our asynchronous str_rot13() call
 function onAsyncCallResult(CallResult $callResult) {

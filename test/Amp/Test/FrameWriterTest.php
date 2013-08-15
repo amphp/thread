@@ -1,9 +1,11 @@
 <?php
 
+namespace Amp\Test;
+
 use Amp\Frame,
     Amp\FrameWriter;
 
-class FrameWriterTest extends PHPUnit_Framework_TestCase {
+class FrameWriterTest extends \PHPUnit_Framework_TestCase {
     
     function testMultiStageBufferedPayloadWrite() {
         $frame = new Frame(Frame::OP_DATA_FIN, $data = 42);
@@ -48,7 +50,7 @@ class FrameWriterTest extends PHPUnit_Framework_TestCase {
      * @expectedException Amp\ResourceException
      */
     function testWriteThrowsExceptionIfOutputStreamIsNotResource() {
-        $outputStream = new StdClass;
+        $outputStream = new \stdClass();
         $writer = new FrameWriter($outputStream);
         
         $frame = new Frame(Frame::OP_DATA_FIN, $data = 42);
