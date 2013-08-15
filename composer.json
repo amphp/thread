@@ -2,7 +2,7 @@
   "name": "rdlowrey/amp",
   "homepage": "https://github.com/rdlowrey/Amp",
   "description": "Asynchronous Multiprocessing for PHP servers and applications.",
-  "keywords": ["parallel", "events", "libevent", "concurrency", "async"],
+  "keywords": ["async", "concurrency", "parallelization", "failover"],
   "license": "MIT",
   "authors": [
     {
