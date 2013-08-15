@@ -1,3 +1,17 @@
+v0.3.0
+------
+
+- Job server script renamed (bye-bye .php extension), added hashbang for easier execution in
+  _*nix_ environments
+- Job server binary now correctly interprets space separators in command line arguments
+- Composer support improved, now plays nice with submodules
+- Convenience autoloader script moved into vendor directory to play nice with composer
+
+
+#### v0.2.2
+
+- Minor bugfixes
+
 #### v0.2.1
 
 - Addressed execution time drift in repeating native reactor alarms
