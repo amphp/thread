@@ -1,3 +1,0 @@
-[submodule "vendor/Alert"]
-	path = vendor/Alert
-	url = git://github.com/rdlowrey/Alert.git

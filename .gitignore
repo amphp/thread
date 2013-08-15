@@ -1,2 +1,4 @@
 *.pyc
 test/coverage
+vendor/
+composer.lock
