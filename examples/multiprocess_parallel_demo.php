@@ -7,7 +7,7 @@
  * Since we're instead dispatching these calls in parallel the program executes in ~1 second.
  */
 
-require dirname(__DIR__) . '/autoload.php'; // <-- Register an AMP autoloader
+require __DIR__ . '/../vendor/autoload.php';
 
 use Alert\Reactor, Alert\ReactorFactory, Amp\CallResult, Amp\IoDispatcher;
 

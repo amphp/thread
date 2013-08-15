@@ -10,7 +10,7 @@
 
 use Alert\ReactorFactory, Amp\IoDispatcher, Amp\CallResult;
 
-require dirname(__DIR__) . '/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 $reactor = (new ReactorFactory)->select();
 $asyncFunctions  = __DIR__ . '/support/my_async_functions.php';

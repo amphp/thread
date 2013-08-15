@@ -22,7 +22,7 @@
  * the console window (STDERR).
  */
 
-require dirname(__DIR__) . '/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 try {
     $bootstrapper = new Amp\JobServerBootstrap;
