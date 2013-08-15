@@ -7,7 +7,7 @@
 
 use Amp\UnserializedIoDispatcher, Amp\IoDispatcher, Alert\ReactorFactory;
 
-require dirname(__DIR__) . '/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 define('RUN_TIME', 3);
 

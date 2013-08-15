@@ -25,7 +25,7 @@
  * fewest outstanding calls.
  */
 
-require dirname(__DIR__) . '/autoload.php'; // <-- Register an AMP autoloader
+require __DIR__ . '/../vendor/autoload.php';
 
 use Alert\ReactorFactory, Amp\CallResult, Amp\JobDispatcher;
 
