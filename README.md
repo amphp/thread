@@ -43,13 +43,15 @@ concurrency and distributed processing a reality for PHP coders of any skill lev
 ###### Git:
 
 ```bash
-$ git clone --recursive https://github.com/rdlowrey/Amp.git
+$ git clone https://github.com/rdlowrey/Amp.git
+$ composer install
 ```
 
 ###### Composer:
 
 ```bash
-$ php composer.phar require rdlowrey/amp:0.2.*
+$ composer require rdlowrey/amp:0.2.*
+$ composer install
 ```
 
 
