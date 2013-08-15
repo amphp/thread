@@ -396,7 +396,7 @@ class UnserializedJobDispatcher implements Dispatcher {
 
     private function doCallResult(JobServerSession $server, Call $call, $result, \Exception $error = NULL) {
         if ($this->debug) {
-            $errorOrSuccess = ($error === NULL) ? 'SUCCESS' : 'ERROR';
+            $errorOrSuccess = ($error === NULL) ? ('SUCCESS') : ('ERROR: ' . $error);
             $color = ($error === NULL) ? AnsiColor::FG_LIGHT_PURPLE : AnsiColor::FG_LIGHT_RED;
             $msg = "Call ID {$call->id} returned ({$call->procedure}): {$errorOrSuccess}";
             $this->debug($msg, $color);
