@@ -11,7 +11,14 @@ $ git clone --recursive http://github.com/rdlowrey/Amp.git
 
 By specifying the `--recursive` option git will retrieve the necessary [`Alert`][alert-repo]
 dependency. This library provides the event/IO reactor underlying AMP's event-driven architecture
-and AMP will not function without it.
+and AMP will not function without it. If you prefer to add an extra step to your workflow you may
+omit the `--recursive` switch and use composer to accomplish the same thing:
+
+
+```bash
+$ git clone https://github.com/rdlowrey/Amp.git
+$ composer install
+ ```
 
 ## 2. Start a job server
 
@@ -20,9 +27,13 @@ AMP job server we actually need to *start an AMP job server.* Assuming we've jus
 repository via git we can get a help screen by executing the following:
 
 ```bash
-$ cd Amp/bin
-$ php amp.php -h
+$ cd Amp
+$ ./bin/amp -h
 ```
+
+> **WINDOWS NOTE:** These example command line executions will "just work" in _*nix_ environments.
+> If you're in windows you'll need to execute the binary by passing it to your PHP command as the
+> executable script is simply a PHP file.
 
 ## 3. Job server configuration
 
@@ -35,25 +46,25 @@ The `listen` directive is required. It's used to specify the IP address and port
 server will listen. You can specify an exact address like so:
 
 ```bash
-$ php amp.php --listen="127.0.0.1:1337"
+$ ./bin/amp --listen="127.0.0.1:1337"
 ```
 
 However, it's generally best to use a wildcard IP (`*`) to capture traffic on all IPv4 interfaces:
 
 ```bash
-$ php amp.php -l=*:1337
+$ ./bin/amp -l=*:1337
 ```
 
 Servers listening on IPv6 interfaces must enclose IP addresses in brackets as demonstrated below:
 
 ```bash
-$ php amp.php --listen=[fe80::1]:1337
+$ ./bin/amp --listen=[fe80::1]:1337
 ```
 
 And the wildcard IPv6 version:
 
 ```bash
-$ php amp.php --l="[::]:1337"
+$ ./bin/amp --l="[::]:1337"
 ```
 
 ### `-i, --include`
@@ -64,7 +75,7 @@ be very helpful. As a result we'll almost always specify an include file to prov
 with userland procedures. Specifying the include file looks like this:
 
 ```bash
-$ php amp.php --listen="*:1337" --include="/hard/path/to/user/functions.php"
+$ ./bin/amp --listen="*:1337" --include="/hard/path/to/user/functions.php"
 ```
 
 ##### Include file procedures
@@ -116,7 +127,7 @@ worker processes in the pool at all times. To modify this number simply pass the
 appropriate switch:
 
 ```bash
-$ php amp.php --listen="*:1337" --include="/my/functions.php" --workers=16
+$ ./bin/amp --listen="*:1337" --include="/my/functions.php" --workers=16
 ```
 
 > **NOTE:** If you dynamically load a lot of unnecessary extensions your PHP processes can open
