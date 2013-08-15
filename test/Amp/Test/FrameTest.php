@@ -1,8 +1,10 @@
 <?php
 
+namespace Amp\Test;
+
 use Amp\Frame;
 
-class FrameTest extends PHPUnit_Framework_TestCase {
+class FrameTest extends \PHPUnit_Framework_TestCase {
     
     /**
      * @dataProvider provideFrameExpectations

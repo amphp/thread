@@ -1,8 +1,10 @@
 <?php
 
+namespace Amp\Test;
+
 use Amp\IoDispatcher;
 
-class IoDispatcherTest extends PHPUnit_Framework_TestCase {
+class IoDispatcherTest extends \PHPUnit_Framework_TestCase {
     
     /**
      * @expectedException \InvalidArgumentException
