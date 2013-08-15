@@ -1,8 +1,10 @@
 <?php
 
+namespace Amp\Test;
+
 use Amp\JobDispatcher;
 
-class JobDispatcherTest extends PHPUnit_Framework_TestCase {
+class JobDispatcherTest extends \PHPUnit_Framework_TestCase {
 
     function testConstruction() {
         $reactor = $this->getMock('Alert\Reactor');

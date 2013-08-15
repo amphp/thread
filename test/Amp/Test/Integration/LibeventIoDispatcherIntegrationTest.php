@@ -1,5 +1,7 @@
 <?php
 
+namespace Amp\Test\Integration;
+
 use Alert\LibeventReactor,
     Amp\IoDispatcher,
     Amp\CallResult,
@@ -7,7 +9,7 @@ use Alert\LibeventReactor,
     Amp\WorkerSession,
     Amp\WorkerSessionFactory;
 
-class LibeventIoDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
+class LibeventIoDispatcherIntegrationTest extends \PHPUnit_Framework_TestCase {
     
     private function skipIfMissingExtLibevent() {
         if (!extension_loaded('libevent')) {
@@ -19,7 +21,7 @@ class LibeventIoDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
     function testNativeFunctionDispatch() {
         $this->skipIfMissingExtLibevent();
-        $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
+        $functions = FIXTURE_PATH . '/dispatch_integration_test_functions.php';
         
         $reactor = new LibeventReactor;
         $dispatcher = new IoDispatcher($reactor, $functions);
@@ -38,7 +40,7 @@ class LibeventIoDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
     function testCustomFunctionDispatch() {
         $this->skipIfMissingExtLibevent();
-        $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
+        $functions = FIXTURE_PATH . '/dispatch_integration_test_functions.php';
         
         $reactor = new LibeventReactor;
         $dispatcher = new IoDispatcher($reactor, $functions);
@@ -63,7 +65,7 @@ class LibeventIoDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
      */
     function testBrokenPipeOnRead() {
         $this->skipIfMissingExtLibevent();
-        $functions  = dirname(__DIR__) . '/fixture/dispatch_die_on_second_invocation.php';
+        $functions = FIXTURE_PATH . '/dispatch_die_on_second_invocation.php';
         
         $reactor = new LibeventReactor;
         $dispatcher = new IoDispatcher($reactor, $functions);
@@ -91,7 +93,7 @@ class LibeventIoDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     
     function testErrorReturnOnUncaughtWorkerFunctionException() {
         $this->skipIfMissingExtLibevent();
-        $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
+        $functions = FIXTURE_PATH . '/dispatch_integration_test_functions.php';
         
         $reactor = new LibeventReactor;
         $dispatcher = new IoDispatcher($reactor, $functions);

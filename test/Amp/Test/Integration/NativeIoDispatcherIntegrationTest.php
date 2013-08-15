@@ -1,5 +1,7 @@
 <?php
 
+namespace Amp\Test\Integration;
+
 use Alert\NativeReactor,
     Amp\IoDispatcher,
     Amp\CallResult,
@@ -7,10 +9,10 @@ use Alert\NativeReactor,
     Amp\WorkerSession,
     Amp\WorkerSessionFactory;
 
-class NativeIoDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
+class NativeIoDispatcherIntegrationTest extends \PHPUnit_Framework_TestCase {
 
     function testNativeFunctionDispatch() {
-        $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
+        $functions = FIXTURE_PATH . '/dispatch_integration_test_functions.php';
 
         $reactor = new NativeReactor;
         $dispatcher = new IoDispatcher($reactor, $functions);
@@ -28,7 +30,7 @@ class NativeIoDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     }
 
     function testCustomFunctionDispatch() {
-        $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
+        $functions = FIXTURE_PATH . '/dispatch_integration_test_functions.php';
 
         $reactor = new NativeReactor;
         $dispatcher = new IoDispatcher($reactor, $functions);
@@ -52,7 +54,7 @@ class NativeIoDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
      * second call dispatch should result in a RESULT_ERROR result.
      */
     function testBrokenPipeOnRead() {
-        $functions  = dirname(__DIR__) . '/fixture/dispatch_die_on_second_invocation.php';
+        $functions = FIXTURE_PATH . '/dispatch_die_on_second_invocation.php';
 
         $reactor = new NativeReactor;
         $dispatcher = new IoDispatcher($reactor, $functions);
@@ -79,7 +81,7 @@ class NativeIoDispatcherIntegrationTest extends PHPUnit_Framework_TestCase {
     }
 
     function testErrorReturnOnUncaughtWorkerFunctionException() {
-        $functions  = dirname(__DIR__) . '/fixture/dispatch_integration_test_functions.php';
+        $functions = FIXTURE_PATH . '/dispatch_integration_test_functions.php';
 
         $reactor = new NativeReactor;
         $dispatcher = new IoDispatcher($reactor, $functions);
