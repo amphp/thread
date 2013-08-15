@@ -6,12 +6,12 @@ use Alert\Reactor;
 
 class JobServerBootstrap {
 
-    private $shortOpts = 'l:i::b::w::udch';
+    private $shortOpts = 'l:i:b:w:udch';
     private $longOpts = [
         'listen:',
-        'include::',
-        'binary::',
-        'workers::',
+        'include:',
+        'binary:',
+        'workers:',
         'unserialized',
         'debug',
         'colors',
