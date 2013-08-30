@@ -245,7 +245,7 @@ while (TRUE) {
 
         if ($outboundFrameLen > 0xFFFF) {
             $secondByte = 0xFF;
-            $lengthBody = pack('N', $this->length);
+            $lengthBody = pack('N', $outboundFrameLen);
         } elseif ($outboundFrameLen < 0xFE) {
             $secondByte = $outboundFrameLen;
             $lengthBody = '';
@@ -267,7 +267,7 @@ while (TRUE) {
             $writeBuffer = '';
         } elseif ($bytesWritten) {
             $writeBuffer = substr($writeBuffer, $bytesWritten);
-        } elseif (!is_resource($this->destination)) {
+        } elseif (!is_resource(STDOUT)) {
             throw new ResourceException(
                 'Failed writing to destination stream'
             );
