@@ -25,7 +25,7 @@ class DispatchResult {
     }
 
     function getError() {
-        return $this->error ?: NULL;
+        return $this->error;
     }
 
     function succeeded() {
