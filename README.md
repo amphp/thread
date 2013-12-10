@@ -1,44 +1,30 @@
 ## AMP: Asynchronous Multiprocessing in PHP
 
-> [**Read the QUICKSTART Guide**][quickstart]
+AMP parallelizes asynchronous function calls to worker thread pools. Its goal is to simplify the 
+use of [`ext/pthreads`][pthreads] in non-blocking applications. AMP allows developers to write
+synchronous functions which are dispatched to the thread pool and returned asynchronously. This
+simple approach makes concurrency and distributed processing a reality for PHP coders of any skill
+level. AMP's OS-agnostic functionality is available in both Windows and POSIX environments via
+the [pthreads extension][pthreads].
 
-AMP parallelizes asynchronous RPC-style function calls to job servers and worker process pools. Its
-goal is to trivialize distributed PHP processing and failover by eliminating the difficulties of
-threading and non-blocking semantics. AMP's OS-agnostic functionality is available in both Windows
-*and* POSIX environments and requires no additional PHP extensions.
+## Project Goals
 
-###### Why?
+* Simplify threaded parallelization in non-blocking PHP code;
+* Build all components using [SOLID][solid], readable and unit-tested code.
 
-Existing evented PHP libraries require non-blocking semantics for computational concurrency. However,
-this is a suboptimal solution to the problem of event-driven concurrency because it enforces the use
-of non-blocking APIs to accomplish anything. Instead, evented code should have access to the vast
-synchronous toolkit already available to PHP developers. AMP allows developers to write synchronous
-functions which are then *executed and returned asynchronously.* This simple approach makes
-concurrency and distributed processing a reality for PHP coders of any skill level.
+## Requirements
 
+* [PHP 5.4+][php-net] ... duh
+* [`ext/pthreads`] The pthreads extension ([windows .DLLs here][win-pthreads-dlls])
+* [rdlowrey/alert][alert] Alert IO/events (retrieved automatically with `$ git clone --recursive`)
 
-#### FEATURES
+[php-net]: http://php.net "php.net"
+[pthreads]: http://pecl.php.net/package/pthreads "pthreads"
+[solid]: http://en.wikipedia.org/wiki/SOLID_(object-oriented_design) "S.O.L.I.D."
+[alert]: https://github.com/rdlowrey/Alert "Alert IO/events"
+[win-pthreads-dlls]: http://windows.php.net/downloads/pecl/releases/pthreads/ "pthreads Windows DLLs"
 
- - Offers a simple API for parallelizing function calls to job servers and worker processes;
- - Supplies a TCP job server for distributed processing in both CLI and web SAPI applications;
- - Allows RPC-style calls to worker processes in languages that *aren't* PHP via a custom
-   inter-process messaging protocol;
-
-
-#### IN DEVELOPMENT
-
- - A lightweight threaded `Dispatcher` implementation to parallelize tasks to worker threads using
-   PHP's [*pthreads*][pthreads] extension (as opposed to more heavy-weight worker processes);
-
-
-#### PROJECT GOALS
-
-* Simplify PHP parallelization and concurrency by minimizing threaded/non-blocking semantics;
-* Establish a unified API for multi-processing, multi-threading and distributed processing/failover;
-* Build all components using [SOLID][solid], readable and thoroughly-tested code.
-
-
-#### INSTALLATION
+## Installation
 
 ###### Git:
 
@@ -49,20 +35,16 @@ $ git clone --recursive https://github.com/rdlowrey/Amp.git
 ###### Composer:
 
 ```bash
-$ php composer.phar require rdlowrey/amp:0.2.*
+$ php composer.phar require rdlowrey/amp:0.4.*
 ```
 
+## Examples
 
-#### REQUIREMENTS
+##### Dispatching from the Event Loop
+@TODO
 
-* PHP 5.4+
-* [rdlowrey/alert][alert] event reactor library (retrieved automatically with `$ git clone --recursive`)
-* *Optional:* [libevent][libevent] for faster evented execution and high-volume socket connections
+##### pthreads Pitfalls
+@TODO
 
-
-[quickstart]: https://github.com/rdlowrey/Amp/blob/master/QUICKSTART.md "AMP QUICKSTART"
-[pthreads]: http://pecl.php.net/package/pthreads "pthreads"
-[ev]: http://pecl.php.net/package/ev "ev"
-[solid]: http://en.wikipedia.org/wiki/SOLID_(object-oriented_design) "S.O.L.I.D."
-[alert]: https://github.com/rdlowrey/Alert "Alert event reactor"
-[libevent]: http://pecl.php.net/package/libevent "libevent"
+##### Configuring Dispatcher Options
+@TODO

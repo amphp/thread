@@ -2,4 +2,10 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-define('FIXTURE_PATH', __DIR__ . '/fixture');
+function multiply($x, $y) {
+    return $x * $y;
+}
+
+function exception() {
+    throw new Exception('test');
+}
