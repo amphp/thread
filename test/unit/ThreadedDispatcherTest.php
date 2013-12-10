@@ -6,17 +6,6 @@ use Amp\ThreadedDispatcher,
 class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
 
     /**
-     * @requires extension pthreads
-     */
-    function testStart() {
-        $reactor = new NativeReactor;
-        $dispatcher = new ThreadedDispatcher($reactor);
-        $this->assertFalse($dispatcher->isStarted());
-        $dispatcher->start();
-        $this->assertTrue($dispatcher->isStarted());
-    }
-
-    /**
      * @dataProvider provideBadOptionKeys
      * @requires extension pthreads
      * @expectedException \DomainException
@@ -40,7 +29,7 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
     function testNativeFunctionDispatch() {
         $reactor = new NativeReactor;
         $dispatcher = new ThreadedDispatcher($reactor);
-        $dispatcher->start();
+        $dispatcher->start(1);
         $dispatcher->call('strlen', 'zanzibar!', function($result) use ($reactor) {
             $this->assertEquals($result->getResult(), 9);
             $reactor->stop();
@@ -54,7 +43,7 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
     function testUserlandFunctionDispatch() {
         $reactor = new NativeReactor;
         $dispatcher = new ThreadedDispatcher($reactor);
-        $dispatcher->start();
+        $dispatcher->start(1);
         $dispatcher->call('multiply', 6, 7, function($result) use ($reactor) {
             $this->assertEquals($result->getResult(), 42);
             $reactor->stop();
@@ -69,31 +58,13 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
     function testErrorResultReturnedIfInvocationThrows() {
         $reactor = new NativeReactor;
         $dispatcher = new ThreadedDispatcher($reactor);
-        $dispatcher->start();
+        $dispatcher->start(1);
         $dispatcher->call('exception', function($result) use ($reactor) {
             $this->assertTrue($result->failed());
             $result->getResult();
             $reactor->stop();
         });
         $reactor->run();
-        $dispatcher = NULL;
     }
+
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
