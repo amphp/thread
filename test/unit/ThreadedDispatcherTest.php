@@ -41,7 +41,7 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
         $reactor = new NativeReactor;
         $dispatcher = new ThreadedDispatcher($reactor);
         $dispatcher->start();
-        $dispatcher->dispatch('strlen', 'zanzibar!', function($result) use ($reactor) {
+        $dispatcher->call('strlen', 'zanzibar!', function($result) use ($reactor) {
             $this->assertEquals($result->getResult(), 9);
             $reactor->stop();
         });
@@ -55,7 +55,7 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
         $reactor = new NativeReactor;
         $dispatcher = new ThreadedDispatcher($reactor);
         $dispatcher->start();
-        $dispatcher->dispatch('multiply', 6, 7, function($result) use ($reactor) {
+        $dispatcher->call('multiply', 6, 7, function($result) use ($reactor) {
             $this->assertEquals($result->getResult(), 42);
             $reactor->stop();
         });
@@ -70,7 +70,7 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
         $reactor = new NativeReactor;
         $dispatcher = new ThreadedDispatcher($reactor);
         $dispatcher->start();
-        $dispatcher->dispatch('exception', function($result) use ($reactor) {
+        $dispatcher->call('exception', function($result) use ($reactor) {
             $this->assertTrue($result->failed());
             $result->getResult();
             $reactor->stop();

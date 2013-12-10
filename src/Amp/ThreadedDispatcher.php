@@ -27,15 +27,6 @@ class ThreadedDispatcher implements Dispatcher {
     }
 
     /**
-     * Has the dispatcher been started?
-     *
-     * @return bool
-     */
-    function isStarted() {
-        return ($this->state === self::$STARTED);
-    }
-
-    /**
      * Spawn worker threads
      *
      * No calls may be dispatched until Dispatcher::start is invoked.
@@ -43,13 +34,19 @@ class ThreadedDispatcher implements Dispatcher {
      * @param int $workerCount The number of worker threads to spawn
      * @return \Amp\Dispatcher Returns the current object instance
      */
-    function start($workerCount = 1) {
-        if ($this->state === self::$STOPPED) {
+    function start($workerCount) {
+        if ($this->state === self::$STARTED) {
+            return;
+        } elseif ($workerCount > 0) {
             $this->state = self::$STARTED;
-            $this->workerCount = $workerCount;
+            $this->workerCount = (int) $workerCount;
             for ($i=0;$i<$workerCount;$i++) {
                 $this->spawnWorker();
             }
+        } else {
+            throw new \InvalidArgumentException(
+                'Argument 1 requires a positive integer'
+            );
         }
         
         return $this;
@@ -165,17 +162,10 @@ class ThreadedDispatcher implements Dispatcher {
      * @param string $procedure The name of the function to invoke
      * @param mixed $varArgs A variable-length argument list to pass the procedure
      * @param callable $onResult The final argument is the callable to invoke with the invocation result
-     * @throws \LogicException if the dispatcher has not been started
      * @throws \InvalidArgumentException if the final parameter is not a valid callback
      * @return \Amp\Dispatcher Returns the current object instance
      */
-    function dispatch($procedure, $varArgs /* ..., $argN, callable $onResult*/) {
-        if ($this->state === self::$STOPPED) {
-            throw new \LogicException(
-                'Cannot dispatch jobs; dispatcher not started!'
-            );
-        }
-
+    function call($procedure, $varArgs /* ..., $argN, callable $onResult*/) {
         $args = func_get_args();
         $callback = array_pop($args);
         if (!($callback && is_callable($callback))) {

@@ -5,13 +5,6 @@ namespace Amp;
 interface Dispatcher {
 
     /**
-     * Has the dispatcher been started?
-     *
-     * @return bool
-     */
-    function isStarted();
-
-    /**
      * Spawn worker threads and start the dispatcher
      *
      * @param int $workerCount The number of worker threads to spawn
@@ -25,7 +18,7 @@ interface Dispatcher {
      * @param mixed $varArgs A variable-length argument list to pass the procedure
      * @param callable $onResult The final argument is the callable to invoke with the invocation result
      */
-    function dispatch($procedure, $varArgs /* ..., $argN, callable $onResult*/);
+    function call($procedure, $varArgs /* ..., $argN, callable $onResult*/);
 
     /**
      * Configure dispatcher options
