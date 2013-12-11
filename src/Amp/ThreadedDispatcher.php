@@ -16,14 +16,122 @@ class ThreadedDispatcher implements Dispatcher {
     private $isWindows;
     private $threadBootstrapPath;
     private $maxQueueSize = 250;
-    private $taskQueueSize = 0;
-    private $taskReflection;
+    private $outstandingCallCount = 0;
+    private $callQueueSize = 0;
+    private $callReflection;
+    private $callTimeoutWatcher;
+    private $callIdTimeoutMap = [];
+    private $callIdWorkerMap = [];
+    private $nextCallId = 1;
+    private $callTimeout = 3;
+    private $callTimeoutCheckInterval = 1;
+    private $timeoutsCurrentlyEnabled = FALSE;
+    private $now;
 
     function __construct(Reactor $reactor) {
         $this->state = self::$STOPPED;
         $this->reactor = $reactor;
         $this->isWindows = (stripos(PHP_OS, "WIN") === 0);
-        $this->taskReflection = new \ReflectionClass('Amp\Task');
+        $this->callReflection = new \ReflectionClass('Amp\Call');
+    }
+
+    /**
+     * Dispatch a call to the thread pool
+     *
+     * @param string $procedure The name of the function to invoke
+     * @param mixed $varArgs A variable-length argument list to pass the procedure
+     * @param callable $onResult The final argument is the callable to invoke with the invocation result
+     * @throws \InvalidArgumentException if the final parameter is not a valid callback
+     * @return int Returns a unique integer call ID identifying this call or integer zero (0) if the
+     *             dispatcher is too busy to handle the call right now.
+     */
+    function call($procedure, $varArgs /* ..., $argN, callable $onResult*/) {
+        $args = func_get_args();
+        $lastArg = end($args);
+
+        if (!is_callable($lastArg)) {
+            throw new \InvalidArgumentException(
+                sprintf('Callable required at argument %d; %s provided', count($args), gettype($lastArg))
+            );
+        } elseif ($this->canAcceptNewCall()) {
+            $callId = $this->acceptNewCall($args);
+        } else {
+            $callId = 0;
+        }
+
+        return $callId;
+    }
+
+    /**
+     * Cancel a previously dispatched call
+     *
+     * @param int $callId The call to be cancelled
+     * @return bool Returns TRUE on successful cancellation or FALSE on an unknown ID
+     */
+    function cancel($callId) {
+        return $this->killCall($callId, new CallCancelledException);
+    }
+
+    private function canAcceptNewCall() {
+        if ($this->maxQueueSize < 0) {
+            $canAccept = TRUE;
+        } elseif ($this->callQueueSize < $this->maxQueueSize) {
+            $canAccept = TRUE;
+        } elseif ($this->availableWorkers) {
+            $canAccept = TRUE;
+        } else {
+            $canAccept = FALSE;
+        }
+
+        return $canAccept;
+    }
+
+    private function acceptNewCall(array $args) {
+        $callId = $this->nextCallId++;
+
+        $this->callQueue[$callId] = $args;
+        $this->callQueueSize++;
+
+        if ($this->callTimeout > -1) {
+            $this->registerCallTimeout($callId);
+        }
+
+        if ($this->availableWorkers) {
+            $this->dequeueNextCall();
+        }
+
+        return $callId;
+    }
+
+    private function registerCallTimeout($callId) {
+        if (!$this->timeoutsCurrentlyEnabled) {
+            $this->now = microtime(TRUE);
+            $this->reactor->enable($this->callTimeoutWatcher);
+            $this->timeoutsCurrentlyEnabled = TRUE;
+        }
+
+        $this->callIdTimeoutMap[$callId] = $this->callTimeout + $this->now;
+    }
+
+    private function dequeueNextCall() {
+        $callId = key($this->callQueue);
+
+        // I know you want to, but don't use array_shift here! It will reindex our numeric $callId keys!
+        $callArgs = $this->callQueue[$callId];
+        unset($this->callQueue[$callId]);
+
+        $afterCall = array_pop($callArgs);
+
+        $call = $this->callReflection->newInstanceArgs($callArgs);
+
+        $worker = array_shift($this->availableWorkers);
+        $worker->call = $call;
+        $worker->callId = $callId;
+        $worker->afterCall = $afterCall;
+        $worker->thread->stack($call);
+
+        $this->callIdWorkerMap[$callId] = $worker;
+        $this->outstandingCallCount++;
     }
 
     /**
@@ -43,30 +151,32 @@ class ThreadedDispatcher implements Dispatcher {
             for ($i=0;$i<$workerCount;$i++) {
                 $this->spawnWorker();
             }
+            $this->registerCallTimeoutWatcher();
         } else {
             throw new \InvalidArgumentException(
                 'Argument 1 requires a positive integer'
             );
         }
-        
+
         return $this;
     }
 
     private function spawnWorker() {
-        list($localSock, $threadSock) = $this->getSocketPair();
+        list($localSock, $threadSock) = $this->generateSocketPair();
         stream_set_blocking($localSock, FALSE);
 
         $sharedData = new SharedData;
-        $thread = new WorkerThread($sharedData, $threadSock, $this->threadBootstrapPath);
-        $thread->start();
+
+        $workerId = (int) $localSock;
 
         $worker = new WorkerState;
-        $worker->id = (int) $localSock;
+        $worker->id = $workerId;
         $worker->localSock = $localSock;
         $worker->threadSock = $threadSock;
         $worker->sharedData = $sharedData;
-        $worker->thread = $thread;
-        $worker->ipcWatcher = $this->reactor->onReadable($worker->localSock, function() use ($worker) {
+        $worker->thread = new WorkerThread($sharedData, $threadSock, $this->threadBootstrapPath);
+        $worker->thread->start();
+        $worker->ipcWatcher = $this->reactor->onReadable($localSock, function() use ($worker) {
             $this->onReadableWorker($worker);
         });
 
@@ -74,7 +184,7 @@ class ThreadedDispatcher implements Dispatcher {
         $this->availableWorkers[$worker->id] = $worker;
     }
 
-    private function getSocketPair() {
+    private function generateSocketPair() {
         $args = $this->isWindows
             ? [STREAM_PF_INET, STREAM_SOCK_STREAM, STREAM_IPPROTO_TCP]
             : [STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP];
@@ -82,120 +192,144 @@ class ThreadedDispatcher implements Dispatcher {
         return call_user_func_array('stream_socket_pair', $args);
     }
 
-    private function onReadableWorker(WorkerState $worker) {
-        $socket = $worker->localSock;
-        $line = fread($socket, 8192);
-        $length = strlen($line);
-
-        if ($length) {
-            $this->dequeueSharedTaskResults($worker, $line, $length);
-        } elseif (!is_resource($socket) || feof($socket)) {
-            $this->onDeadWorker($worker);
+    private function registerCallTimeoutWatcher() {
+        if ($this->callTimeout > -1) {
+            $this->now = microtime(TRUE);
+            $this->callTimeoutWatcher = $this->reactor->repeat(function() {
+                $this->timeoutOverdueCalls();
+            }, $interval = $this->callTimeoutCheckInterval);
+            $this->timeoutsCurrentlyEnabled = TRUE;
         }
     }
 
-    private function dequeueSharedTaskResults(WorkerState $worker, $line, $length) {
-        $this->taskQueueSize -= $length;
-
-        for ($i=0; $i<$length; $i++) {
-            $data = $worker->sharedData->shift();
-            $c = $line[$i];
-
-            if ($c === '+') {
-                $result = $data;
-                $error = NULL;
-                $isFatal = FALSE;
+    private function timeoutOverdueCalls() {
+        $now = microtime(TRUE);
+        $this->now = $now;
+        foreach ($this->callIdTimeoutMap as $callId => $timeoutAt) {
+            if ($now >= $timeoutAt) {
+                $this->killCall($callId, new CallTimeoutException);
             } else {
-                $result = NULL;
-                $error = new DispatchExecutionException($data);
-                $isFatal = ($c === 'x');
+                break;
             }
-
-            $result = new DispatchResult($result, $error);
-            $onTaskCompletion = $worker->onTaskCompletion;
-
-            if ($isFatal) {
-                $this->onDeadWorker($worker);
-            } else {
-                $this->makeWorkerAvailable($worker);
-            }
-
-            if ($this->taskQueue) {
-                $this->dequeueNextTask();
-            }
-
-            $onTaskCompletion($result);
         }
     }
 
-    private function makeWorkerAvailable(WorkerState $worker) {
-        $worker->onTaskCompletion = NULL;
-        $worker->currentTask = NULL;
-        $this->availableWorkers[$worker->id] = $worker;
-    }
+    private function killCall($callId, DispatcherException $error) {
+        if (isset($this->callIdWorkerMap[$callId])) {
+            $worker = $this->callIdWorkerMap[$callId];
+            $afterCall = $worker->afterCall;
+            $this->unloadWorker($worker);
+            $worker->thread->kill();
+            $this->reactor->immediately(function() {
+                $this->spawnWorker();
+            });
+            $killSucceeded = TRUE;
+        } elseif (isset($this->callQueue[$callId])) {
+            $afterCall = end($this->callQueue[$callId]);
+            unset(
+                $this->callQueue[$callId]
+            );
+            $killSucceeded = TRUE;
+        } else {
+            // In case Dispatcher::cancel uses an unknown call ID
+            $killSucceeded = FALSE;
+        }
 
-    private function onDeadWorker(WorkerState $worker) {
-        $this->unloadWorker($worker);
-        $this->spawnWorker();
+        if ($killSucceeded) {
+            $callResult = new CallResult($callId, $data = NULL, $error);
+            $afterCall($callResult);
+            $this->outstandingCallCount--;
+        }
+
+        return $killSucceeded;
     }
 
     private function unloadWorker(WorkerState $worker) {
         $this->reactor->cancel($worker->ipcWatcher);
+
+        $workerId = $worker->id;
+        $callId = $worker->callId;
+
         unset(
-            $this->workers[$worker->id],
-            $this->availableWorkers[$worker->id]
+            $this->workers[$workerId],
+            $this->availableWorkers[$workerId],
+            $this->callIdWorkerMap[$callId],
+            $this->callIdTimeoutMap[$callId]
         );
+
         if (is_resource($worker->localSock)) {
             @fclose($worker->localSock);
         }
         if (is_resource($worker->threadSock)) {
             @fclose($worker->threadSock);
         }
-        if (!$worker->thread->isShutdown()) {
-            $worker->thread->shutdown();
+    }
+
+    private function onReadableWorker(WorkerState $worker) {
+        $socket = $worker->localSock;
+        $resultChar = fgetc($socket);
+
+        if (isset($resultChar[0])) {
+            $this->dequeueWorkerCallResult($worker, $resultChar);
+        } elseif (!is_resource($socket) || feof($socket)) {
+            echo "---OMG DEAD WORKER\n";
+            $this->onDeadWorker($worker);
         }
     }
 
-    /**
-     * Dispatch a call to the thread pool
-     *
-     * @param string $procedure The name of the function to invoke
-     * @param mixed $varArgs A variable-length argument list to pass the procedure
-     * @param callable $onResult The final argument is the callable to invoke with the invocation result
-     * @throws \InvalidArgumentException if the final parameter is not a valid callback
-     * @return \Amp\Dispatcher Returns the current object instance
-     */
-    function call($procedure, $varArgs /* ..., $argN, callable $onResult*/) {
-        $args = func_get_args();
-        $callback = array_pop($args);
-        if (!($callback && is_callable($callback))) {
-            throw new \InvalidArgumentException(
-                sprintf('Callable required at argument %d; %s provided', count($args), gettype($callback))
-            );
-        }
+    private function dequeueWorkerCallResult(WorkerState $worker, $resultChar) {
+        $this->callQueueSize--;
 
-        $task = $this->taskReflection->newInstanceArgs($args);
+        $data = $worker->sharedData->shift();
 
-        if ($this->maxQueueSize <= 0 || $this->taskQueueSize < $this->maxQueueSize) {
-            $this->taskQueue[] = [$task, $callback];
-            $this->taskQueueSize++;
-            $this->dequeueNextTask();
+        if ($resultChar === '+') {
+            $result = $data;
+            $error = NULL;
+            $isFatal = FALSE;
         } else {
-            $result = new DispatchResult($data = NULL, $error = new DispatcherBusyException(
-                'Too busy; task queue full'
-            ));
-            $callback($result);
+            $result = NULL;
+            $error = new CallException($data);
+            $isFatal = ($resultChar === 'x');
         }
-        
-        return $this;
+
+        $callId = $worker->callId;
+        $callResult = new CallResult($callId, $result, $error);
+        $afterCall = $worker->afterCall;
+        $afterCall($callResult);
+        $this->outstandingCallCount--;
+
+        if ($isFatal) {
+            $this->onDeadWorker($worker);
+        } else {
+            $this->makeWorkerAvailable($worker);
+        }
+
+        if ($this->callQueue && $this->availableWorkers) {
+            $this->dequeueNextCall();
+        } elseif ($this->timeoutsCurrentlyEnabled && !($this->callQueue || $this->outstandingCallCount)) {
+            $this->timeoutsCurrentlyEnabled = FALSE;
+            $this->reactor->disable($this->callTimeoutWatcher);
+        }
     }
 
-    private function dequeueNextTask() {
-        if ($this->availableWorkers) {
-            $worker = array_shift($this->availableWorkers);
-            list($worker->currentTask, $worker->onTaskCompletion) = array_shift($this->taskQueue);
-            $worker->thread->stack($worker->currentTask);
-        }
+    private function makeWorkerAvailable(WorkerState $worker) {
+        $callId = $worker->callId;
+
+        unset(
+            $this->callIdWorkerMap[$callId],
+            $this->callIdTimeoutMap[$callId]
+        );
+
+        $worker->callId = NULL;
+        $worker->call = NULL;
+        $worker->afterCall = NULL;
+
+        $this->availableWorkers[$worker->id] = $worker;
+    }
+
+    private function onDeadWorker(WorkerState $worker) {
+        $this->unloadWorker($worker);
+        $this->spawnWorker();
     }
 
     /**
@@ -233,12 +367,13 @@ class ThreadedDispatcher implements Dispatcher {
 
     private function setMaxQueueSize($int) {
         $this->maxQueueSize = filter_var($int, FILTER_VALIDATE_INT, ['options' => [
-            'min_range' => 0,
+            'min_range' => -1,
             'default' => 250
         ]]);
     }
-    
+
     function __destruct() {
+        $this->reactor->cancel($this->callTimeoutWatcher);
         foreach ($this->workers as $worker) {
             $this->unloadWorker($worker);
         }

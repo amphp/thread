@@ -7,7 +7,6 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
 
     /**
      * @dataProvider provideBadOptionKeys
-     * @requires extension pthreads
      * @expectedException \DomainException
      */
     function testSetOptionThrowsOnUnknownOption($badOptionName) {
@@ -23,9 +22,6 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
         ];
     }
 
-    /**
-     * @requires extension pthreads
-     */
     function testNativeFunctionDispatch() {
         $reactor = new NativeReactor;
         $dispatcher = new ThreadedDispatcher($reactor);
@@ -37,9 +33,6 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
         $reactor->run();
     }
 
-    /**
-     * @requires extension pthreads
-     */
     function testUserlandFunctionDispatch() {
         $reactor = new NativeReactor;
         $dispatcher = new ThreadedDispatcher($reactor);
@@ -52,8 +45,7 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
     }
 
     /**
-     * @expectedException \Amp\DispatchException
-     * @requires extension pthreads
+     * @expectedException \Amp\DispatcherException
      */
     function testErrorResultReturnedIfInvocationThrows() {
         $reactor = new NativeReactor;
@@ -64,6 +56,51 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
             $result->getResult();
             $reactor->stop();
         });
+        $reactor->run();
+    }
+
+    /**
+     * @expectedException \Amp\DispatcherException
+     */
+    function testErrorResultReturnedIfInvocationFatals() {
+        $this->markTestSkipped(
+            'This test still makes pthreads segfault'
+        );
+
+        $reactor = new NativeReactor;
+        $dispatcher = new ThreadedDispatcher($reactor);
+        $dispatcher->start(1);
+        $dispatcher->call('fatal', function($result) use ($reactor) {
+            $this->assertTrue($result->failed());
+            $result->getResult();
+            $reactor->stop();
+        });
+        $reactor->run();
+    }
+
+    function testCancel() {
+        $reactor = new NativeReactor;
+        $dispatcher = new ThreadedDispatcher($reactor);
+        $dispatcher->start(1);
+
+        // Store this so we can reference it and cancel the associated call
+        $callId;
+
+        // The call we want to cancel
+        $reactor->immediately(function() use ($dispatcher, $reactor, &$callId) {
+            $callId = $dispatcher->call('sleep', 999, function($callResult) {
+                $this->assertTrue($callResult->cancelled());
+            });
+        });
+
+        // The actual cancellation
+        $reactor->once(function() use ($dispatcher, $reactor, &$callId) {
+            $wasCancelled = $dispatcher->cancel($callId);
+            $this->assertTrue($wasCancelled);
+            $reactor->stop();
+        }, 0.1);
+
+        // Release the hounds
         $reactor->run();
     }
 

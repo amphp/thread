@@ -9,3 +9,7 @@ function multiply($x, $y) {
 function exception() {
     throw new Exception('test');
 }
+
+function fatal() {
+    $nonexistentObj->nonexistentMethod();
+}

@@ -2,12 +2,14 @@
 
 namespace Amp;
 
-class DispatchResult {
+class CallResult {
 
+    private $callId;
     private $data;
     private $error;
 
-    function __construct($data = NULL, \Exception $error = NULL) {
+    function __construct($callId, $data = NULL, \Exception $error = NULL) {
+        $this->callId = $callId;
         $this->data = $data;
         $this->error = $error;
     }
@@ -16,7 +18,7 @@ class DispatchResult {
         if (!$this->error) {
             return $this->data;
         } else {
-            throw new DispatchException(
+            throw new DispatcherException(
                 $msg = 'Dispatch failure',
                 $code = 0,
                 $this->error
@@ -34,6 +36,14 @@ class DispatchResult {
 
     function failed() {
         return (bool) $this->error;
+    }
+
+    function cancelled() {
+        return $this->error && $this->error instanceof CallCancelledException;
+    }
+
+    function getCallId() {
+        return $this->callId;
     }
 
 }

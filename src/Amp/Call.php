@@ -2,10 +2,10 @@
 
 namespace Amp;
 
-class Task extends \Stackable {
+class Call extends \Stackable {
 
-    private $argCount;
-    private $procedure;
+    public $argCount;
+    public $procedure;
 
     function __construct($procedure) {
         $this->procedure = $procedure;
@@ -20,7 +20,7 @@ class Task extends \Stackable {
         }
     }
 
-    public function run() {
+    public function run() { 
         try {
             if ($this->argCount) {
                 $args = [];

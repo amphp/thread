@@ -9,6 +9,7 @@ class WorkerState {
     public $sharedData;
     public $thread;
     public $ipcWatcher;
-    public $currentTask;
-    public $onTaskCompletion;
+    public $call;
+    public $callId;
+    public $afterCall;
 }

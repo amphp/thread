@@ -6,6 +6,15 @@ class WorkerThread extends \Worker {
 
     private $sharedData;
     private $ipcSocket;
+    private static $fatals = [
+        E_ERROR,
+        E_PARSE,
+        E_USER_ERROR,
+        E_CORE_ERROR,
+        E_CORE_WARNING,
+        E_COMPILE_ERROR,
+        E_COMPILE_WARNING
+    ];
 
     function __construct(SharedData $sharedData, $ipcSocket, $bootstrapPath = NULL) {
         $this->sharedData = $sharedData;
@@ -22,7 +31,8 @@ class WorkerThread extends \Worker {
     }
 
     function run() {
-        //register_shutdown_function([&$this, 'onShutdown']);
+        // This still causes segfaults so we can't deal with shutdown functions yet ...
+        // register_shutdown_function([&$this, 'onShutdown']);
     }
 
     function onShutdown() {
@@ -30,10 +40,9 @@ class WorkerThread extends \Worker {
             return;
         }
 
-        $fatals = [E_ERROR, E_PARSE, E_USER_ERROR, E_CORE_ERROR, E_CORE_WARNING, E_COMPILE_ERROR, E_COMPILE_WARNING];
         $lastError = error_get_last();
 
-        if ($lastError && in_array($lastError['type'], $fatals)) {
+        if ($lastError && in_array($lastError['type'], self::$fatals)) {
             extract($lastError);
             $errorMsg = sprintf("%s in %s on line %d", $message, $file, $line);
             fwrite($this->ipcSocket, "x");
