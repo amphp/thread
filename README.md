@@ -15,7 +15,7 @@ the [pthreads extension][pthreads].
 ## Requirements
 
 * [PHP 5.4+][php-net] ... duh
-* [`ext/pthreads`] The pthreads extension ([windows .DLLs here][win-pthreads-dlls])
+* [`ext/pthreads`][pthreads] The pthreads extension ([windows .DLLs here][win-pthreads-dlls])
 * [rdlowrey/alert][alert] Alert IO/events (retrieved automatically with `$ git clone --recursive`)
 
 [php-net]: http://php.net "php.net"
@@ -29,7 +29,7 @@ the [pthreads extension][pthreads].
 ###### Git:
 
 ```bash
-$ git clone --recursive https://github.com/rdlowrey/Amp.git
+$ git clone --recursive git@github.com:rdlowrey/Amp.git
 ```
 
 ###### Composer:
@@ -46,5 +46,8 @@ $ php composer.phar require rdlowrey/amp:0.4.*
 ##### pthreads Pitfalls
 @TODO
 
-##### Configuring Dispatcher Options
+##### Cancelling Dispatched Calls
+@TODO
+
+##### Call Timeouts
 @TODO
