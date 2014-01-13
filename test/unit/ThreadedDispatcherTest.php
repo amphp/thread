@@ -63,10 +63,7 @@ class ThreadedDispatcherTest extends PHPUnit_Framework_TestCase {
      * @expectedException \Amp\DispatcherException
      */
     function testErrorResultReturnedIfInvocationFatals() {
-        $this->markTestSkipped(
-            'This test still makes pthreads segfault'
-        );
-
+        //$this->markTestSkipped('still segfaulting');
         $reactor = new NativeReactor;
         $dispatcher = new ThreadedDispatcher($reactor);
         $dispatcher->start(1);

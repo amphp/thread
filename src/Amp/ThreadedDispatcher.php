@@ -11,6 +11,7 @@ class ThreadedDispatcher implements Dispatcher {
 
     private $state;
     private $reactor;
+    private $pendingWorkers = [];
     private $workers = [];
     private $availableWorkers = [];
     private $isWindows;
@@ -22,8 +23,8 @@ class ThreadedDispatcher implements Dispatcher {
     private $callTimeoutWatcher;
     private $callIdTimeoutMap = [];
     private $callIdWorkerMap = [];
-    private $nextCallId = 1;
-    private $callTimeout = 3;
+    private $nextCallId;
+    private $callTimeout = 30;
     private $callTimeoutCheckInterval = 1;
     private $timeoutsCurrentlyEnabled = FALSE;
     private $now;
@@ -33,6 +34,7 @@ class ThreadedDispatcher implements Dispatcher {
         $this->reactor = $reactor;
         $this->isWindows = (stripos(PHP_OS, "WIN") === 0);
         $this->callReflection = new \ReflectionClass('Amp\Call');
+        $this->nextCallId = PHP_INT_MAX * -1;
     }
 
     /**
@@ -72,6 +74,10 @@ class ThreadedDispatcher implements Dispatcher {
         return $this->killCall($callId, new CallCancelledException);
     }
 
+    function hasWorkers() {
+        return (bool) $this->workers;
+    }
+
     private function canAcceptNewCall() {
         if ($this->maxQueueSize < 0) {
             $canAccept = TRUE;
@@ -87,7 +93,10 @@ class ThreadedDispatcher implements Dispatcher {
     }
 
     private function acceptNewCall(array $args) {
-        $callId = $this->nextCallId++;
+        if (!$callId = $this->nextCallId++) {
+            $callId = $this->nextCallId++;
+        }
+
 
         $this->callQueue[$callId] = $args;
         $this->callQueueSize++;
@@ -116,19 +125,23 @@ class ThreadedDispatcher implements Dispatcher {
     private function dequeueNextCall() {
         $callId = key($this->callQueue);
 
-        // I know you want to, but don't use array_shift here! It will reindex our numeric $callId keys!
+        // I know you want to, but don't use array_shift here!
+        // It will reindex our numeric $callId keys!
         $callArgs = $this->callQueue[$callId];
         unset($this->callQueue[$callId]);
 
         $afterCall = array_pop($callArgs);
 
         $call = $this->callReflection->newInstanceArgs($callArgs);
+        $callNotifier = new CallNotifier;
 
         $worker = array_shift($this->availableWorkers);
         $worker->call = $call;
+        $worker->callNotifier = $callNotifier;
         $worker->callId = $callId;
         $worker->afterCall = $afterCall;
         $worker->thread->stack($call);
+        $worker->thread->stack($callNotifier);
 
         $this->callIdWorkerMap[$callId] = $worker;
         $this->outstandingCallCount++;
@@ -144,8 +157,8 @@ class ThreadedDispatcher implements Dispatcher {
      */
     function start($workerCount) {
         if ($this->state === self::$STARTED) {
-            return;
-        } elseif ($workerCount > 0) {
+            // do nothing
+        } elseif (is_int($workerCount) && $workerCount > 0) {
             $this->state = self::$STARTED;
             $this->workerCount = (int) $workerCount;
             for ($i=0;$i<$workerCount;$i++) {
@@ -157,39 +170,66 @@ class ThreadedDispatcher implements Dispatcher {
                 'Argument 1 requires a positive integer'
             );
         }
-
         return $this;
     }
 
     private function spawnWorker() {
-        list($localSock, $threadSock) = $this->generateSocketPair();
-        stream_set_blocking($localSock, FALSE);
-
         $sharedData = new SharedData;
+        list($ipcUri, $ipcServer) = $this->generateIpcServer();
+        $workerId = (int) $ipcServer;
 
-        $workerId = (int) $localSock;
+        $ipcAcceptWatcher = $this->reactor->onReadable($ipcServer, function($watcherId, $ipcServer) {
+            $this->acceptIpcClient($ipcServer);
+        });
 
         $worker = new WorkerState;
+        $this->pendingWorkers[$workerId] = $worker;
+
         $worker->id = $workerId;
-        $worker->localSock = $localSock;
-        $worker->threadSock = $threadSock;
+        $worker->ipcServer = $ipcServer;
+        $worker->ipcAcceptWatcher = $ipcAcceptWatcher;
         $worker->sharedData = $sharedData;
-        $worker->thread = new WorkerThread($sharedData, $threadSock, $this->threadBootstrapPath);
+        $worker->thread = new WorkerThread($sharedData, $ipcUri, $this->threadBootstrapPath);
         $worker->thread->start();
-        $worker->ipcWatcher = $this->reactor->onReadable($localSock, function() use ($worker) {
+    }
+
+    private function generateIpcServer() {
+        //$uri = 'tcp://127.0.0.1:9382';
+        @unlink('/home/daniel/test');
+        $uri = 'unix:///home/daniel/test';
+
+        $flags = STREAM_SERVER_BIND | STREAM_SERVER_LISTEN;
+        $server = @stream_socket_server($uri, $errno, $errstr, $flags);
+
+        if ($server) {
+            stream_set_blocking($server, FALSE);
+            return [$uri, $server];
+        } else {
+            throw new \RuntimeException(
+                sprintf("Failed binding IPC socket: (%d) %s", $errno, $errstr)
+            );
+        }
+    }
+
+    private function acceptIpcClient($ipcServer) {
+        if (!$ipcClient = @stream_socket_accept($ipcServer)) {
+            throw new \RuntimeException(
+                'Failed accepting IPC client'
+            );
+        }
+
+        stream_set_blocking($ipcClient, FALSE);
+
+        $workerId = (int) $ipcServer;
+        $worker = $this->pendingWorkers[$workerId];
+        $worker->ipcClient = $ipcClient;
+        $worker->ipcReadWatcher = $this->reactor->onReadable($ipcClient, function() use ($worker) {
             $this->onReadableWorker($worker);
         });
 
-        $this->workers[$worker->id] = $worker;
-        $this->availableWorkers[$worker->id] = $worker;
-    }
-
-    private function generateSocketPair() {
-        $args = $this->isWindows
-            ? [STREAM_PF_INET, STREAM_SOCK_STREAM, STREAM_IPPROTO_TCP]
-            : [STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP];
-
-        return call_user_func_array('stream_socket_pair', $args);
+        unset($this->pendingWorkers[$workerId]);
+        $this->workers[$workerId] = $worker;
+        $this->availableWorkers[$workerId] = $worker;
     }
 
     private function registerCallTimeoutWatcher() {
@@ -245,7 +285,8 @@ class ThreadedDispatcher implements Dispatcher {
     }
 
     private function unloadWorker(WorkerState $worker) {
-        $this->reactor->cancel($worker->ipcWatcher);
+        $this->reactor->cancel($worker->ipcAcceptWatcher);
+        $this->reactor->cancel($worker->ipcReadWatcher);
 
         $workerId = $worker->id;
         $callId = $worker->callId;
@@ -257,22 +298,21 @@ class ThreadedDispatcher implements Dispatcher {
             $this->callIdTimeoutMap[$callId]
         );
 
-        if (is_resource($worker->localSock)) {
-            @fclose($worker->localSock);
+        if (is_resource($worker->ipcClient)) {
+            @fclose($worker->ipcClient);
         }
-        if (is_resource($worker->threadSock)) {
-            @fclose($worker->threadSock);
+        if (is_resource($worker->ipcServer)) {
+            @fclose($worker->ipcServer);
         }
     }
 
     private function onReadableWorker(WorkerState $worker) {
-        $socket = $worker->localSock;
+        $socket = $worker->ipcClient;
         $resultChar = fgetc($socket);
 
         if (isset($resultChar[0])) {
             $this->dequeueWorkerCallResult($worker, $resultChar);
         } elseif (!is_resource($socket) || feof($socket)) {
-            echo "---OMG DEAD WORKER\n";
             $this->onDeadWorker($worker);
         }
     }
@@ -282,7 +322,7 @@ class ThreadedDispatcher implements Dispatcher {
 
         $data = $worker->sharedData->shift();
 
-        if ($resultChar === '+') {
+        if ($resultChar === CallNotifier::SUCCESS) {
             $result = $data;
             $error = NULL;
             $isFatal = FALSE;
@@ -320,10 +360,7 @@ class ThreadedDispatcher implements Dispatcher {
             $this->callIdTimeoutMap[$callId]
         );
 
-        $worker->callId = NULL;
-        $worker->call = NULL;
-        $worker->afterCall = NULL;
-
+        $worker->callId = $worker->call = $worker->callNotifier = $worker->afterCall = NULL;
         $this->availableWorkers[$worker->id] = $worker;
     }
 

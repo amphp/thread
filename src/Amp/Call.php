@@ -20,24 +20,19 @@ class Call extends \Stackable {
         }
     }
 
-    public function run() { 
-        try {
-            if ($this->argCount) {
-                $args = [];
-                for ($i=0; $i<$this->argCount; $i++) {
-                    $args[] = $this->{"_$i"};
-                }
-                $result = call_user_func_array($this->procedure, $args);
-            } else {
-                $result = call_user_func($this->procedure);
+    public function run() {
+        if ($this->argCount) {
+            $args = [];
+            for ($i=0; $i<$this->argCount; $i++) {
+                $args[] = $this->{"_$i"};
             }
-            $failed = FALSE;
-        } catch (\Exception $e) {
-            $result = $e->__toString();
-            $failed = TRUE;
+            $result = call_user_func_array($this->procedure, $args);
+        } else {
+            $result = call_user_func($this->procedure);
         }
 
-        $this->worker->fufill($result, $failed);
+        $this->worker->lastCallSucceeded = TRUE;
+        $this->worker->sharedData[] = $result;
     }
 
 }

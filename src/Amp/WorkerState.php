@@ -4,12 +4,14 @@ namespace Amp;
 
 class WorkerState {
     public $id;
-    public $localSock;
-    public $threadSock;
+    public $ipcServer;
+    public $ipcAcceptWatcher;
+    public $ipcClient;
+    public $ipcReadWatcher;
     public $sharedData;
     public $thread;
-    public $ipcWatcher;
     public $call;
+    public $callNotifier;
     public $callId;
     public $afterCall;
 }
