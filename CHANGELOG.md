@@ -1,3 +1,12 @@
+v0.4.0-dev
+----------
+
+- Major migration to pthreads-only functionality. Previous versions no longer supported.
+
+#### v0.3.1
+
+- Addressed fatal error when returning data frames from worker processes exceeding 65535 bytes in size.
+
 v0.3.0
 ------
 

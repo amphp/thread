@@ -5,11 +5,11 @@ ini_set('display_errors', 1);
 
 use Alert\Reactor,
     Alert\NativeReactor,
-    Amp\Dispatcher,
-    Amp\ThreadedDispatcher,
-    Amp\CallResult;
+    Amp\ThreadDispatcher,
+    Amp\PthreadsDispatcher,
+    Amp\TaskResult;
 
-require __DIR__ . '/vendor/autoload.php';
+require __DIR__ . '/autoload.php';
 
 class Benchmarker {
 
@@ -20,7 +20,7 @@ class Benchmarker {
     private $startMicrotime;
     private $elapsedTime;
 
-    function __construct(Reactor $reactor, Dispatcher $dispatcher) {
+    function __construct(Reactor $reactor, ThreadDispatcher $dispatcher) {
         $this->reactor = $reactor;
         $this->dispatcher = $dispatcher;
     }
@@ -36,9 +36,8 @@ class Benchmarker {
 
         $iterations = $options['iterations'];
         $displayOn = $options['displayOn'];
-        
-        array_push($dispatchArgs, function(CallResult $result) use ($iterations, $displayOn) {
-            //var_dump($result->getResult());
+
+        array_push($dispatchArgs, function(TaskResult $result) use ($iterations, $displayOn) {
             $this->errors += $result->failed();
             if (++$this->results % $displayOn !== 0) {
                 return;
@@ -81,34 +80,11 @@ class Benchmarker {
 }
 
 $reactor = new NativeReactor;
-$dispatcher = new ThreadedDispatcher($reactor);
-$dispatcher->start(1);
+$dispatcher = new PthreadsDispatcher($reactor);
 $benchmarker = new Benchmarker($reactor, $dispatcher);
 $benchmarker->benchmark([
     'strlen',
     'zanzibar'
+], $options = [
+    'workers' => 8
 ]);
-
-
-/*
-$taskId = 0;
-$reactor = new NativeReactor;
-$dispatcher = new ThreadedDispatcher($reactor);
-$dispatcher->start(3);
-$reactor->immediately(function() use ($dispatcher, $reactor, &$taskId) {
-    $callId = $dispatcher->call('sleep', 30, function($result) {
-        printf("Did result fail? %s\n", $result->failed() ? 'YES' : 'NO');
-    });
-    
-    $taskId = $callId;
-});
-
-$reactor->once(function() use ($dispatcher, $reactor, &$taskId) {
-    if ($dispatcher->cancel($taskId)) {
-        echo "cancelled!\n";
-        $reactor->stop();
-    }
-}, 0.1);
-$reactor->run();
-*/
-

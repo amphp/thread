@@ -2,10 +2,9 @@
 
 AMP parallelizes asynchronous function calls to worker thread pools. Its goal is to simplify the 
 use of [`ext/pthreads`][pthreads] in non-blocking applications. AMP allows developers to write
-synchronous functions which are dispatched to the thread pool and returned asynchronously. This
-simple approach makes concurrency and distributed processing a reality for PHP coders of any skill
-level. AMP's OS-agnostic functionality is available in both Windows and POSIX environments via
-the [pthreads extension][pthreads].
+synchronous functions which are dispatched to the thread pool and returned asynchronously. AMP's
+OS-agnostic functionality is available in both Windows and POSIX environments via the
+[pthreads extension][pthreads].
 
 ## Project Goals
 
