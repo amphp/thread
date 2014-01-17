@@ -1,19 +1,28 @@
-## AMP: Asynchronous Multiprocessing in PHP
+AMP: Async Multiprocessing in PHP
+---------------------------------
 
-AMP parallelizes asynchronous function calls to worker thread pools. Its goal is to simplify the 
-use of [`ext/pthreads`][pthreads] in non-blocking applications. AMP allows developers to write
-synchronous functions which are dispatched to the thread pool and returned asynchronously. AMP's
-OS-agnostic functionality is available in both Windows and POSIX environments via the
-[pthreads extension][pthreads].
+Amp parallelizes asynchronous function calls to worker thread pools. Its goal is to simplify the
+use of blocking functions and libraries in non-blocking applications. The library allows developers
+to write synchronous code which is then dispatched to a thread pool and returned asynchronously.
+This functionality is exposed in an OS-agnostic manner via the [pthreads extension][pthreads].
 
-## Project Goals
+**Problem Domain**
 
-* Simplify threaded parallelization in non-blocking PHP code;
+PHP has a broad catalog of synchronous libraries and extensions. However, it's often difficult to
+find non-blocking libs to use inside our event loop. Beyond this limitation, there are common tasks
+(like filesystem IO) which don't play nice with the non-blocking paradigm. Unfortunately, threading
+is an altogether different approach to concurrency from that used in non-blocking applications.
+Amp's goal is to seemlessly expose access to threaded concurrency inside event-loop applications.
+
+
+### Project Goals
+
+* Expose threaded parallelization in non-blocking PHP code;
 * Build all components using [SOLID][solid], readable and unit-tested code.
 
-## Requirements
+### Requirements
 
-* [PHP 5.4+][php-net] ... duh
+* [PHP 5.4+][php-net] You'll need PHP, of course.
 * [`ext/pthreads`][pthreads] The pthreads extension ([windows .DLLs here][win-pthreads-dlls])
 * [rdlowrey/alert][alert] Alert IO/events (retrieved automatically with `$ git clone --recursive`)
 
@@ -23,7 +32,7 @@ OS-agnostic functionality is available in both Windows and POSIX environments vi
 [alert]: https://github.com/rdlowrey/Alert "Alert IO/events"
 [win-pthreads-dlls]: http://windows.php.net/downloads/pecl/releases/pthreads/ "pthreads Windows DLLs"
 
-## Installation
+### Installation
 
 ###### Git:
 
