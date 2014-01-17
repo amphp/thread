@@ -85,7 +85,7 @@ class PthreadsDispatcherTest extends PHPUnit_Framework_TestCase {
         // The task we want to cancel
         $reactor->immediately(function() use ($dispatcher, $reactor, &$taskId) {
             $taskId = $dispatcher->call('sleep', 999, function($taskResult) {
-                $this->assertTrue($taskResult->cancelled());
+                $this->assertTrue($taskResult->failed());
             });
         });
 

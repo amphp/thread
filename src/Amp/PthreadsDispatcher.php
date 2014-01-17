@@ -322,6 +322,9 @@ class PthreadsDispatcher implements ThreadDispatcher {
         });
         $this->workers[$workerId] = $worker;
         $this->availableWorkers[$workerId] = $worker;
+        if ($this->cachedQueueSize++) {
+            $this->dequeueNextTask();
+        }
     }
 
     private function onReadableIpcClient(Worker $worker) {
