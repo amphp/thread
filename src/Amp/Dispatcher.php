@@ -2,7 +2,7 @@
 
 namespace Amp;
 
-interface Dispatcher {
+interface Dispatcher extends \Countable {
 
     /**
      * Initialization resources and start the dispatcher
@@ -33,13 +33,13 @@ interface Dispatcher {
      * @return bool Return TRUE if the specified task existed and was cancelled, FALSE otherwise.
      */
     function cancel($taskId);
-    
+
     /**
-     * Retrieve a count of tasks queued for execution in the thread pool
+     * Retrieve a count of all outstanding tasks (queued and in-progress)
      *
      * @return int
      */
-    function countOutstanding();
+    function count();
 
     /**
      * Configure dispatcher options

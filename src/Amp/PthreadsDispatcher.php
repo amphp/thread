@@ -6,22 +6,16 @@ use Alert\Reactor;
 
 class PthreadsDispatcher implements ThreadDispatcher {
 
-    private static $STOPPED = 0;
-    private static $STARTED = 1;
-    private static $PRIORITY_HIGH = 1;
-    private static $PRIORITY_NORMAL = 0;
-
-    private $state;
     private $reactor;
     private $ipcUri;
     private $ipcServer;
     private $ipcAcceptWatcher;
+    private $isStarted = FALSE;
     private $queue;
     private $workers = [];
     private $pendingIpcClients = [];
     private $pendingWorkers = [];
     private $availableWorkers = [];
-    private $threadBootstrapPaths = [];
     private $queuedTaskIds = [];
     private $cachedQueueSize = 0;
     private $taskTimeoutWatcher;
@@ -30,6 +24,7 @@ class PthreadsDispatcher implements ThreadDispatcher {
     private $rejectedTasks = [];
     private $taskRejector;
     private $nextTaskId;
+    private $threadStartFlags = PTHREADS_INHERIT_ALL;
     private $poolSize = 1;
     private $taskTimeout = 30;
     private $executionLimit = 512;
@@ -42,29 +37,31 @@ class PthreadsDispatcher implements ThreadDispatcher {
     private $now;
 
     public function __construct(Reactor $reactor) {
-        $this->state = self::$STOPPED;
         $this->reactor = $reactor;
         $this->taskReflection = new \ReflectionClass('Amp\Task');
         $this->nextTaskId = PHP_INT_MAX * -1;
         $this->taskRejector = function() { $this->processTaskRejections(); };
-        $this->queue = new \SplPriorityQueue;
+        $this->queue = new TaskPriorityQueue;
     }
 
     /**
      * Dispatch a procedure call to the thread pool
      *
+     * This method will auto-start the thread pool if workers have not been spawned.
+     *
      * @param string $procedure The name of the function to invoke
      * @param mixed $varArgs A variable-length argument list to pass the procedure
      * @param callable $onResult The final argument is the callable to invoke with the invocation result
      * @throws \InvalidArgumentException if the final parameter is not a valid callback
-     * @return int Returns a unique integer task ID identifying this task or integer zero (0) if the
-     *             dispatcher is too busy to accept the task right now.
+     * @return int Returns a unique integer task ID identifying this task. This value MAY be zero.
      */
     public function call($procedure, $varArgs /* ..., $argN, callable $onResult*/) {
         if (!is_string($procedure)) {
             throw new \InvalidArgumentException(
                 sprintf('%s requires a string at Argument 1', __METHOD__)
             );
+        } elseif (!$this->isStarted) {
+            $this->start();
         }
 
         $funcArgs = func_get_args();
@@ -93,18 +90,28 @@ class PthreadsDispatcher implements ThreadDispatcher {
     }
 
     /**
-     * Dispatch a Stackable task to the thread pool for processing
+     * Dispatch a pthreads Stackable to the thread pool for processing
      *
-     * @param \Stackable $task
-     * @param callable $onResult
-     * @return int Returns a unique integer task ID identifying this task or integer zero (0) if the
-     *             dispatcher is too busy to accept the task right now.
+     * This method will auto-start the thread pool if workers have not been spawned.
+     *
+     * @param \Stackable $task A custom pthreads stackable
+     * @param callable $onResult The callable to invoke upon completion
+     * @param int $priority Task priority [1-100]
+     * @throws \InvalidArgumentException On invalid priority type
+     * @throws \RangeException On priority outside the acceptable range [1-100]
+     * @return int Returns a unique integer task ID identifying this task. This value MAY be zero.
      */
     public function execute(\Stackable $task, callable $onResult, $priority = 50) {
+        return $this->doExecution($task, $priority, $onResult);
+    }
+
+    private function doExecution(\Stackable $task, $priority, callable $onResult = NULL) {
         if (!is_int($priority)) {
             throw new \InvalidArgumentException;
         } elseif ($priority < 1 || $priority > 100) {
             throw new \RangeException;
+        } elseif (!$this->isStarted) {
+            $this->start();
         }
 
         $taskId = $this->nextTaskId++;
@@ -117,6 +124,25 @@ class PthreadsDispatcher implements ThreadDispatcher {
         }
 
         return $taskId;
+    }
+
+    /**
+     * Blindly dispatch a pthreads Stackable to the thread pool without a result callback
+     *
+     * This method is useful if you legitimately do not care whether a task fails or
+     * encounters an error. Be very careful with its use, however. Ignoring errors can
+     * lead to phantom bugs that are very difficult to diagnose!
+     *
+     * This method will auto-start the thread pool if workers have not been spawned.
+     *
+     * @param \Stackable $task A custom pthreads stackable
+     * @param int $priority Task priority [1-100]
+     * @throws \InvalidArgumentException On invalid priority type
+     * @throws \RangeException On priority outside the acceptable range
+     * @return int Returns a unique integer task ID identifying this task. This value MAY be zero.
+     */
+    public function forget(\Stackable $task, $priority = 50) {
+        return $this->doExecution($task, $priority);
     }
 
     private function isTooBusy() {
@@ -163,15 +189,15 @@ class PthreadsDispatcher implements ThreadDispatcher {
 
         unset($this->queuedTaskIds[$taskId]);
 
-        $taskNotifier = new TaskNotifier;
+        $taskNotifier = $onResult ? new TaskNotifier : new ForgetNotifier;
 
         $worker = array_shift($this->availableWorkers);
         $worker->task = $task;
         $worker->taskNotifier = $taskNotifier;
         $worker->taskId = $taskId;
         $worker->onTaskResult = $onResult;
-        $worker->slave->stack($task);
-        $worker->slave->stack($taskNotifier);
+        $worker->thread->stack($task);
+        $worker->thread->stack($taskNotifier);
 
         $this->taskIdWorkerMap[$taskId] = $worker;
     }
@@ -198,14 +224,14 @@ class PthreadsDispatcher implements ThreadDispatcher {
     /**
      * Spawn worker threads
      *
-     * No tasks may be dispatched until Dispatcher::start is invoked.
+     * No tasks will be dispatched until Dispatcher::start is invoked.
      *
      * @return \Amp\Dispatcher Returns the current object instance
      */
     public function start() {
-        if ($this->state !== self::$STARTED) {
+        if (!$this->isStarted) {
             $this->generateIpcServer();
-            $this->state = self::$STARTED;
+            $this->isStarted = TRUE;
             for ($i=0;$i<$this->poolSize;$i++) {
                 $this->spawnWorker();
             }
@@ -255,18 +281,18 @@ class PthreadsDispatcher implements ThreadDispatcher {
 
     private function spawnWorker() {
         $sharedData = new SharedData;
-        $slave = new Slave($sharedData, $this->ipcUri, $this->threadBootstrapPaths);
+        $thread = new Thread($sharedData, $this->ipcUri);
 
-        if (!$slave->start()) {
+        if (!$thread->start()) {
             throw new \RuntimeException(
                 'Worker thread failed to start'
             );
         }
 
         $worker = new Worker;
-        $worker->id = $slave->getThreadId();
+        $worker->id = $thread->getThreadId();
         $worker->sharedData = $sharedData;
-        $worker->slave = $slave;
+        $worker->thread = $thread;
 
         $this->pendingWorkers[$worker->id] = $worker;
 
@@ -322,7 +348,7 @@ class PthreadsDispatcher implements ThreadDispatcher {
         });
         $this->workers[$workerId] = $worker;
         $this->availableWorkers[$workerId] = $worker;
-        if ($this->cachedQueueSize++) {
+        if ($this->queue->count()) {
             $this->dequeueNextTask();
         }
     }
@@ -365,7 +391,7 @@ class PthreadsDispatcher implements ThreadDispatcher {
             $worker = $this->taskIdWorkerMap[$taskId];
             $onTaskResult = $worker->onTaskResult;
             $this->unloadWorker($worker);
-            $worker->slave->kill();
+            $worker->thread->kill();
             $this->spawnWorker();
             $taskMatchFound = TRUE;
         } elseif (isset($this->rejectedTasks[$taskId])) {
@@ -380,8 +406,9 @@ class PthreadsDispatcher implements ThreadDispatcher {
             $taskMatchFound = FALSE;
         }
 
-        if ($taskMatchFound) {
-            $this->cachedQueueSize--;
+        $this->cachedQueueSize -= $taskMatchFound;
+
+        if ($taskMatchFound && $onTaskResult && !$error instanceof CancellationException) {
             $taskResult = new TaskResult($taskId, $data = NULL, $error);
             $onTaskResult($taskResult);
         }
@@ -390,15 +417,18 @@ class PthreadsDispatcher implements ThreadDispatcher {
     }
 
     private function pluckResultCallbackFromQueue($taskId) {
-        // Eddie Izzard FTW!
-        $newQueue = new \SplPriorityQueue;
-        $this->queue->setExtractFlags(SplPriorityQueue::EXTR_BOTH);
+        $this->queue->setExtractFlags(TaskPriorityQueue::EXTR_BOTH);
         $onTaskResult = NULL;
 
-        foreach ($this->queue as list($taskStruct, $priority)) {
-            $newQueue->insert($taskStruct, $priority);
-            if (!$onTaskResult && $taskStruct[0] == $taskId) {
-                $onTaskResult = end($taskStruct);
+        // Eddie Izzard FTW! ... NEW QUEUE!
+        $newQueue = new TaskPriorityQueue;
+
+        foreach ($this->queue as $taskArr) {
+            extract($taskArr); // $data + $priority
+            if (!$onTaskResult && $data[0] == $taskId) {
+                $onTaskResult = end($data);
+            } else {
+                $newQueue->insert($data, $priority);
             }
         }
 
@@ -435,20 +465,22 @@ class PthreadsDispatcher implements ThreadDispatcher {
 
     private function processWorkerTaskResult(Worker $worker, $resultCode) {
         $data = $worker->sharedData->shift();
-
+        $result = $error = NULL;
+        $wasFatal = $isPartial = FALSE;
         switch ($resultCode) {
-            case Slave::SUCCESS:
+            case Thread::SUCCESS:
                 $result = $data;
-                $error = NULL;
-                $wasFatal = FALSE;
                 break;
-            case Slave::FAILURE:
-                $result = NULL;
+            case Thread::PARTIAL:
+                $result = $data;
+                $isPartial = TRUE;
+                break;
+            case Thread::FORGET:
+                break;
+            case Thread::FAILURE:
                 $error = new TaskException($data);
-                $wasFatal = FALSE;
                 break;
-            case Slave::FATAL:
-                $result = NULL;
+            case Thread::FATAL:
                 $error = new TaskException($data);
                 $wasFatal = TRUE;
                 break;
@@ -458,10 +490,26 @@ class PthreadsDispatcher implements ThreadDispatcher {
                 );
         }
 
+        $taskResult = new TaskResult($worker->taskId, $result, $error, $isPartial);
+
+        return ($isPartial)
+            ? $this->sendPartialResult($taskResult, $worker)
+            : $this->sendFinalResult($taskResult, $worker, $wasFatal);
+    }
+
+    private function sendPartialResult(TaskResult $taskResult, Worker $worker) {
+        if ($onTaskResult = $worker->onTaskResult) {
+            $onTaskResult($taskResult);
+        }
+    }
+
+    private function sendFinalResult(TaskResult $taskResult, Worker $worker, $wasFatal) {
         $this->cachedQueueSize--;
         $worker->tasksExecuted++;
-        $taskId = $worker->taskId;
-        $taskResult = new TaskResult($taskId, $result, $error);
+
+        if ($onTaskResult = $worker->onTaskResult) {
+            $onTaskResult($taskResult);
+        }
 
         if ($wasFatal) {
             $shouldRespawn = TRUE;
@@ -473,36 +521,27 @@ class PthreadsDispatcher implements ThreadDispatcher {
             $shouldRespawn = FALSE;
         }
 
-        $this->finalizeTaskResult($worker, $taskResult, $shouldRespawn);
-    }
+        if ($shouldRespawn) {
+            $this->respawnWorker($worker);
+        }
 
-    private function finalizeTaskResult(Worker $worker, TaskResult $taskResult, $shouldRespawn) {
-        try {
-            $onTaskResult = $worker->onTaskResult;
-            $onTaskResult($taskResult);
-        } finally {
-            if ($shouldRespawn) {
-                $this->respawnWorker($worker);
-            }
+        $taskId = $worker->taskId;
 
-            $taskId = $worker->taskId;
+        unset(
+            $this->taskIdWorkerMap[$taskId],
+            $this->taskIdTimeoutMap[$taskId]
+        );
 
-            unset(
-                $this->taskIdWorkerMap[$taskId],
-                $this->taskIdTimeoutMap[$taskId]
-            );
+        $worker->taskId = $worker->task = $worker->taskNotifier = $worker->onTaskResult = NULL;
+        $this->availableWorkers[$worker->id] = $worker;
 
-            $worker->taskId = $worker->task = $worker->taskNotifier = $worker->onTaskResult = NULL;
-            $this->availableWorkers[$worker->id] = $worker;
+        $queueSize = $this->queue->count();
 
-            $queueSize = $this->queue->count();
-
-            if ($queueSize && $this->availableWorkers) {
-                $this->dequeueNextTask();
-            } elseif ($this->isTimeoutWatcherEnabled && !$queueSize) {
-                $this->isTimeoutWatcherEnabled = FALSE;
-                $this->reactor->disable($this->taskTimeoutWatcher);
-            }
+        if ($queueSize && $this->availableWorkers) {
+            $this->dequeueNextTask();
+        } elseif ($this->isTimeoutWatcherEnabled && !$queueSize) {
+            $this->isTimeoutWatcherEnabled = FALSE;
+            $this->reactor->disable($this->taskTimeoutWatcher);
         }
     }
 
@@ -521,14 +560,14 @@ class PthreadsDispatcher implements ThreadDispatcher {
      */
     public function setOption($option, $value) {
         switch (strtolower($option)) {
-            case 'threadbootstrappath':
-                $this->setThreadBootstrapPath($value); break;
+            case 'threadstartflags':
+                $this->setThreadStartFlags($value); break;
+            case 'poolsize':
+                $this->setPoolSize($value); break;
             case 'tasktimeout':
                 $this->setTaskTimeout($value); break;
             case 'executionlimit':
                 $this->setExecutionLimit($value); break;
-            case 'poolsize':
-                $this->setPoolSize($value); break;
             case 'ipcuri':
                 $this->setIpcUri($value); break;
             case 'unixipcsocketdir':
@@ -542,19 +581,8 @@ class PthreadsDispatcher implements ThreadDispatcher {
         return $this;
     }
 
-    private function setThreadBootstrapPath($path) {
-        if (!($path && is_string($path))) {
-            throw new \InvalidArgumentException(
-                "Thread bootstrap file requires a non-empty string"
-            );
-        } elseif (is_file($path) && is_readable($path)) {
-            $this->threadBootstrapPaths[] = $path;
-            $this->threadBootstrapPaths = array_unique($this->threadBootstrapPaths);
-        } else {
-            throw new \InvalidArgumentException(
-                sprintf('Thread autoloader path must point to a readable file: %s', $path)
-            );
-        }
+    private function setThreadStartFlags($flags) {
+        $this->threadStartFlags = $flags;
     }
 
     private function setPoolSize($int) {
@@ -579,7 +607,7 @@ class PthreadsDispatcher implements ThreadDispatcher {
     }
 
     private function setIpcUri($uri) {
-        if ($this->state === self::$STARTED) {
+        if ($this->isStarted) {
             throw new \RuntimeException(
                 'Cannot assign IPC URI while the dispatcher is running!'
             );
@@ -624,11 +652,11 @@ class PthreadsDispatcher implements ThreadDispatcher {
     }
 
     /**
-     * Retrieve a count of tasks queued for execution in the thread pool
+     * Retrieve a count of all outstanding tasks (queued and in-progress)
      *
      * @return int
      */
-    function countOutstanding() {
+    function count() {
         return $this->cachedQueueSize;
     }
 
@@ -637,11 +665,11 @@ class PthreadsDispatcher implements ThreadDispatcher {
      *
      * @param \Stackable $task
      * @param callable $onResult
-     * @return int Returns a unique integer task ID identifying this task or integer zero (0) if the
-     *             dispatcher is too busy to accept the task right now.
+     * @param int $priority
+     * @return int Returns a unique integer task ID identifying this task. This value MAY be zero.
      */
-    public function __invoke(\Stackable $task, callable $onResult) {
-        return $this->execute($task, $onResult);
+    public function __invoke(\Stackable $task, callable $onResult, $priority = 50) {
+        return $this->execute($task, $onResult, $priority);
     }
 
     /**
@@ -650,8 +678,7 @@ class PthreadsDispatcher implements ThreadDispatcher {
      * @param string $method
      * @param array $args
      * @throws \InvalidArgumentException if the final parameter is not a valid callback
-     * @return int Returns a unique integer task ID identifying this task or integer zero (0) if the
-     *             dispatcher is too busy to accept the task right now.
+     * @return int Returns a unique integer task ID identifying this task. This value MAY be zero.
      */
     public function __call($method, $args) {
         array_unshift($args, $method);

@@ -7,13 +7,10 @@ class Worker {
     public $ipcClient;
     public $ipcReadWatcher;
     public $sharedData;
-    public $slave;
+    public $thread;
     public $task;
     public $taskNotifier;
     public $taskId;
     public $afterTask;
     public $tasksExecuted = 0;
-    public $sqid;
-    public $sqidQueue;
-    public $sqidQueueSize;
 }

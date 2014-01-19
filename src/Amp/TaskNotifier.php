@@ -26,10 +26,10 @@ class TaskNotifier extends \Stackable {
         $error = error_get_last();
 
         if ($error && in_array($error['type'], $fatals)) {
-            $resultCode = Slave::FATAL;
+            $resultCode = Thread::FATAL;
             $data = sprintf("%s in %s on line %d", $error['message'], $error['file'], $error['line']);
         } else {
-            $resultCode = Slave::ERROR;
+            $resultCode = Thread::FAILURE;
             $data = "Stackable tasks MUST register results with the worker thread";
         }
 

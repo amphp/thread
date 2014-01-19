@@ -7,11 +7,13 @@ class TaskResult implements DispatchResult {
     private $taskId;
     private $result;
     private $error;
+    private $isPartial;
 
-    function __construct($taskId, $result = NULL, \Exception $error = NULL) {
+    function __construct($taskId, $result = NULL, \Exception $error = NULL, $isPartial = FALSE) {
         $this->taskId = $taskId;
         $this->result = $result;
         $this->error = $error;
+        $this->isPartial = (bool) $isPartial;
     }
 
     /**
@@ -71,6 +73,15 @@ class TaskResult implements DispatchResult {
      */
     function failed() {
         return (bool) $this->error;
+    }
+
+    /**
+     * Is this only a partial result (more to come?)
+     *
+     * @return bool
+     */
+    function isPartial() {
+        return $this->isPartial;
     }
 
 }

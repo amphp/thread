@@ -13,3 +13,15 @@ function exception() {
 function fatal() {
     $nonexistentObj->nonexistentMethod();
 }
+
+class FatalStackable extends \Stackable {
+    public function run() {
+        $nonexistentObj->nonexistentMethod();
+    }
+}
+
+class ThrowingStackable extends \Stackable {
+    public function run() {
+        throw new Exception('test');
+    }
+}

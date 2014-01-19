@@ -2,27 +2,22 @@
 
 namespace Amp;
 
-class Slave extends \Worker {
+class Thread extends \Worker {
 
     const SUCCESS = '1';
     const FAILURE = '0';
     const FATAL = '-';
+    const PARTIAL = '+';
+    const FORGET = '*';
 
     private $sharedData;
     private $ipcUri;
     private $ipcSocket;
     private $lastTaskResultCode;
-    private $bootstrapPaths;
 
-    public function __construct(SharedData $sharedData, $ipcUri, array $bootstrapPaths = []) {
+    public function __construct(SharedData $sharedData, $ipcUri) {
         $this->sharedData = $sharedData;
         $this->ipcUri = $ipcUri;
-        $this->bootstrapPaths = $bootstrapPaths;
-        /*
-        if (func_num_args() > 3) {
-            $userArgs = array_slice(func_get_args(), 3);
-        }
-        */
     }
 
     public function run() {
@@ -44,12 +39,6 @@ class Slave extends \Worker {
         }
 
         $this->ipcSocket = $ipcSocket;
-
-        if ($this->bootstrapPaths) {
-            foreach ($this->bootstrapPaths as $path) {
-                require_once $path;
-            }
-        }
     }
 
     private function registerResult($resultCode, $data) {
@@ -57,6 +46,7 @@ class Slave extends \Worker {
             case self::SUCCESS: break;
             case self::FAILURE: break;
             case self::FATAL: break;
+            case self::FORGET: break;
             default:
                 $resultCode = self::FAILURE;
                 $data = sprintf('Stackable task registered unknown result code: %s', $resultCode);

@@ -37,10 +37,10 @@ class Task extends \Stackable {
                 $result = $procedure();
             }
 
-            $resultCode = Slave::SUCCESS;
+            $resultCode = Thread::SUCCESS;
 
         } catch (\Exception $e) {
-            $resultCode = Slave::FAILURE;
+            $resultCode = Thread::FAILURE;
             $result = $e->__toString();
         }
 

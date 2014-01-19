@@ -3,8 +3,9 @@ AMP: Async Multiprocessing in PHP
 
 Amp parallelizes asynchronous function calls to worker thread pools. Its goal is to simplify the
 use of blocking functions and libraries in non-blocking applications. The library allows developers
-to write synchronous code which is then dispatched to a thread pool and returned asynchronously.
-This functionality is exposed in an OS-agnostic manner via the [pthreads extension][pthreads].
+to write synchronous code which is executed by thread pool workers with results returned
+asynchronously upon completion. This functionality is exposed in an OS-agnostic manner via the
+[pthreads extension][pthreads].
 
 **Problem Domain**
 
@@ -46,16 +47,86 @@ $ git clone --recursive git@github.com:rdlowrey/Amp.git
 $ php composer.phar require rdlowrey/amp:0.4.*
 ```
 
-## Examples
+## The Guide
 
-##### Dispatching from the Event Loop
+**Event Loop Basics**
+
+* @TODO
+
+**Basic Usage**
+
+* [Basic Calls](#basic-calls)
+* [Magic Calls](#magic-calls)
+* [Error Handling](#error-handling)
+* [Task Cancellation](#task-cancellation)
+* [Task Timeouts](#task-timeouts)
+* [Pool Size](#pool-size)
+* [Execution Limits](#execution-limits)
+* [Other Options](#other-options)
+* [Pthreads Pitfalls](#pthreads-pitfalls)
+
+**Advanced Usage**
+
+* [Stackable Tasks](#stackable-tasks)
+* [Fire and Forget](#fire-and-forget)
+* [Class Autoloading](#class-autoloading)
+* [Custom Thread Environment](#custom-thread-environment)
+
+**Common Mistakes**
+
+* @TODO
+
+
+
+
+### Event Loop Basics
 @TODO
 
-##### pthreads Pitfalls
+### Basic Usage
+
+##### Basic Calls
 @TODO
 
-##### Cancelling Dispatched Calls
+##### Magic Calls
 @TODO
 
-##### Call Timeouts
+##### Error Handling
+@TODO
+
+##### Task Cancellation
+@TODO
+
+##### Task Timeouts
+@TODO
+
+##### Pool Size
+@TODO
+
+##### Execution Limits
+@TODO
+
+##### Other Options
+@TODO
+
+##### Pthreads Pitfalls
+@TODO
+
+
+### Advanced Usage
+
+##### Stackable Tasks
+@TODO
+
+##### Fire and Forget
+@TODO
+
+##### Class Autoloading
+@TODO
+
+##### Custom Thread Environment
+@TODO
+
+
+### Common Mistakes**
+
 @TODO
