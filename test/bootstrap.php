@@ -25,3 +25,11 @@ class ThrowingStackable extends \Stackable {
         throw new Exception('test');
     }
 }
+
+class TestAutoloaderStackable extends \Stackable {
+    function run() {
+        spl_autoload_register(function() {
+            require_once __DIR__ . '/AutoloadableClass.php';
+        });
+    }
+}

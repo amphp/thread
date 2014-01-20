@@ -27,9 +27,10 @@ class PthreadsDispatcher implements ThreadDispatcher {
     private $threadStartFlags = PTHREADS_INHERIT_ALL;
     private $poolSize = 1;
     private $taskTimeout = 30;
-    private $executionLimit = 512;
+    private $executionLimit = 1024;
     private $maxTaskQueueSize = 1024;
     private $unixIpcSocketDir;
+    private $onWorkerStartTasks;
     private $taskTimeoutCheckInterval = 1;
     private $isTimeoutWatcherEnabled = FALSE;
     private $isRejectionEnabled = FALSE;
@@ -42,6 +43,7 @@ class PthreadsDispatcher implements ThreadDispatcher {
         $this->nextTaskId = PHP_INT_MAX * -1;
         $this->taskRejector = function() { $this->processTaskRejections(); };
         $this->queue = new TaskPriorityQueue;
+        $this->onWorkerStartTasks = new \SplObjectStorage;
     }
 
     /**
@@ -70,7 +72,7 @@ class PthreadsDispatcher implements ThreadDispatcher {
             throw new \InvalidArgumentException(
                 sprintf(
                     'Callable required at argument %d; %s provided',
-                    count($funcArgs),
+                    func_num_args(),
                     gettype($onResult)
                 )
             );
@@ -348,6 +350,11 @@ class PthreadsDispatcher implements ThreadDispatcher {
         });
         $this->workers[$workerId] = $worker;
         $this->availableWorkers[$workerId] = $worker;
+
+        foreach ($this->onWorkerStartTasks as $task) {
+            $worker->thread->stack($task);
+        }
+
         if ($this->queue->count()) {
             $this->dequeueNextTask();
         }
@@ -560,6 +567,8 @@ class PthreadsDispatcher implements ThreadDispatcher {
      */
     public function setOption($option, $value) {
         switch (strtolower($option)) {
+            case 'onworkerstart':
+                $this->addOnWorkerStartTask($value); break;
             case 'threadstartflags':
                 $this->setThreadStartFlags($value); break;
             case 'poolsize':
@@ -579,6 +588,10 @@ class PthreadsDispatcher implements ThreadDispatcher {
         }
 
         return $this;
+    }
+
+    private function addOnWorkerStartTask(\Stackable $task) {
+        $this->onWorkerStartTasks->attach($task);
     }
 
     private function setThreadStartFlags($flags) {
@@ -601,7 +614,7 @@ class PthreadsDispatcher implements ThreadDispatcher {
 
     private function setExecutionLimit($int) {
         $this->executionLimit = filter_var($int, FILTER_VALIDATE_INT, ['options' => [
-            'min_range' => 0,
+            'min_range' => -1,
             'default' => 256
         ]]);
     }

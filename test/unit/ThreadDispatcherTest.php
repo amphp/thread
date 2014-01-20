@@ -9,20 +9,20 @@ class PthreadsDispatcherTest extends PHPUnit_Framework_TestCase {
      * @dataProvider provideBadOptionKeys
      * @expectedException \DomainException
      */
-    function testSetOptionThrowsOnUnknownOption($badOptionName) {
+    public function testSetOptionThrowsOnUnknownOption($badOptionName) {
         $reactor = new NativeReactor;
         $dispatcher = new PthreadsDispatcher($reactor);
         $dispatcher->setOption($badOptionName, 42);
     }
 
-    function provideBadOptionKeys() {
+    public function provideBadOptionKeys() {
         return [
             ['unknownName'],
             ['someothername']
         ];
     }
 
-    function testNativeFunctionDispatch() {
+    public function testNativeFunctionDispatch() {
         $reactor = new NativeReactor;
         $dispatcher = new PthreadsDispatcher($reactor);
         $dispatcher->start();
@@ -33,7 +33,7 @@ class PthreadsDispatcherTest extends PHPUnit_Framework_TestCase {
         $reactor->run();
     }
 
-    function testUserlandFunctionDispatch() {
+    public function testUserlandFunctionDispatch() {
         $reactor = new NativeReactor;
         $dispatcher = new PthreadsDispatcher($reactor);
         $dispatcher->start();
@@ -47,7 +47,7 @@ class PthreadsDispatcherTest extends PHPUnit_Framework_TestCase {
     /**
      * @expectedException \Amp\DispatchException
      */
-    function testErrorResultReturnedIfInvocationThrows() {
+    public function testErrorResultReturnedIfInvocationThrows() {
         $reactor = new NativeReactor;
         $dispatcher = new PthreadsDispatcher($reactor);
         $dispatcher->start();
@@ -62,7 +62,7 @@ class PthreadsDispatcherTest extends PHPUnit_Framework_TestCase {
     /**
      * @expectedException \Amp\DispatchException
      */
-    function testErrorResultReturnedIfInvocationFatals() {
+    public function testErrorResultReturnedIfInvocationFatals() {
         $reactor = new NativeReactor;
         $dispatcher = new PthreadsDispatcher($reactor);
         $dispatcher->start();
@@ -74,7 +74,7 @@ class PthreadsDispatcherTest extends PHPUnit_Framework_TestCase {
         $reactor->run();
     }
 
-    function testNextTaskDequeuedOnCompletion() {
+    public function testNextTaskDequeuedOnCompletion() {
         $reactor = new NativeReactor;
         $dispatcher = new PthreadsDispatcher($reactor);
         // Make sure the second call gets queued
@@ -92,7 +92,7 @@ class PthreadsDispatcherTest extends PHPUnit_Framework_TestCase {
         $reactor->run();
     }
 
-    function testCancel() {
+    public function testCancel() {
         $reactor = new NativeReactor;
         $dispatcher = new PthreadsDispatcher($reactor);
         $dispatcher->start();
@@ -118,7 +118,7 @@ class PthreadsDispatcherTest extends PHPUnit_Framework_TestCase {
         $reactor->run();
     }
 
-    function testCount() {
+    public function testCount() {
         $reactor = new NativeReactor;
         $dispatcher = new PthreadsDispatcher($reactor);
         // Make sure repeated calls get queued behind the first call
@@ -151,9 +151,11 @@ class PthreadsDispatcherTest extends PHPUnit_Framework_TestCase {
         $this->assertEquals(0, $dispatcher->count());
     }
 
-    function testForget() {
+    public function testForget() {
+        //$this->markTestSkipped('phpunit breaks on this test');
+
         $reactor = new NativeReactor;
-        $reactor->immediately(function() use ($reactor) {
+        $reactor->run(function() use ($reactor) {
             $dispatcher = new PthreadsDispatcher($reactor);
             $dispatcher->setOption('poolSize', 1)->setOption('taskTimeout', 3);
             $dispatcher->forget(new ThrowingStackable);
@@ -163,8 +165,21 @@ class PthreadsDispatcherTest extends PHPUnit_Framework_TestCase {
                 $reactor->stop();
             });
         });
+    }
 
-        $reactor->run();
+    public function testNewWorkerIncludes() {
+        //$this->markTestSkipped('phpunit breaks on this test');
+
+        $reactor = new NativeReactor;
+        $reactor->run(function() use ($reactor) {
+            $dispatcher = new PthreadsDispatcher($reactor);
+            $dispatcher->setOption('onWorkerStart', new TestAutoloaderStackable);
+            $dispatcher->setOption('poolSize', 1);
+            $dispatcher->call('AutoloadableClass::test', function($r) use ($reactor, $dispatcher) {
+                $this->assertEquals(42, $r->getResult());
+                $reactor->stop();
+            });
+        });
     }
 
 }

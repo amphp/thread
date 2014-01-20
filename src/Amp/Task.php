@@ -33,8 +33,7 @@ class Task extends \Stackable {
                 }
                 $result = call_user_func_array($this->procedure, $args);
             } else {
-                $procedure = $this->procedure;
-                $result = $procedure();
+                $result = call_user_func($this->procedure);
             }
 
             $resultCode = Thread::SUCCESS;
