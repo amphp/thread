@@ -84,7 +84,7 @@ $ php composer.phar require rdlowrey/amp:0.4.*
 
 ### Intro
 
-##### Event Loop Basics
+#### Event Loop Basics
 
 Executing code inside an event loop allows us to use non-blocking libraries to perform many IO
 operations at the same time. Instead of waiting for each individual operation to complete the event
@@ -110,7 +110,7 @@ control and *will not* return this control until your application calls `Reactor
 ### Basic Usage
 
 
-##### Basic Calls
+#### Basic Calls
 
 The simplest way to use Amp is to dispatch calls to global functions:
 
@@ -165,7 +165,7 @@ The above code retrieves the contents of the file at `/path/to/file` and var_dum
 our main thread upon completion.
 
 
-##### Userland Functions
+#### Userland Functions
 
 We aren't limited to native functions. The `Amp\PthreadsDispatcher` can dispatch calls to userland
 functions just as easily. Consider:
@@ -195,7 +195,7 @@ int(42)
 ```
 
 
-##### Static Methods
+#### Static Methods
 
 The `Dispatcher::call` method can handle any callable string, so we aren't limited to function
 names. We can also dispatch calls to static class methods:
@@ -233,7 +233,7 @@ int(42)
 > demonstrated in the [Class Autoloading](#class-autoloading) section of this guide.
 
 
-##### Magic Calls
+#### Magic Calls
 
 Dispatchers take advantage of the magic `__call()` method to simply calls to functions in the global
 namespace. Consider:
@@ -260,7 +260,7 @@ our main thread upon completion.
 > [Pthreads Pitfalls](#pthreads-pitfalls) section.
 
 
-##### Error Handling
+#### Error Handling
 
 You should have noticed that our examples to this point have not returned results directly. Instead,
 they return an instance of `Amp\DispatcherResult`. These wrapper objects allow us to distinguish
@@ -324,7 +324,7 @@ $reactor->run(function() use ($reactor) {
 });
 ```
 
-##### Task Cancellation
+#### Task Cancellation
 
 All calls return a unique integer task ID referencing the call. We can use this ID to cancel a
 dispatched call at any time prior to completion via `Dispatcher::cancel()`. If a call is cancelled
@@ -360,7 +360,7 @@ $reactor->run(function() use ($reactor) {
 });
 ```
 
-##### Task Timeouts
+#### Task Timeouts
 
 > **NOTE:** Relying on timeouts is almost always a poor design decision. You're much better served
 > to solve the underlying problem that causes slow execution in your dispatched calls/tasks. This
@@ -399,7 +399,7 @@ $reactor->run(function() use ($reactor) {
 });
 ```
 
-##### Pool Size
+#### Pool Size
 
 You may have noticed that in some of our previous examples we've explicity set a `"poolSize"` option.
 The effect of this setting should be obvious: it controls how many worker threads we spawn to handle
@@ -422,7 +422,7 @@ the Dispatcher has started will have no effect.
 > **NOTE:** Like the other dispatcher options, `"poolSize"` is NOT case-sensitive.
 
 
-##### Thread Execution Limits
+#### Thread Execution Limits
 
 In theory we shouldn't have to worry about sloppy code or extensions playing fast and loose with
 memory resources. However in the real world this may not always be an option. Amp makes provision
@@ -451,7 +451,7 @@ $dispatcher->setOption('executionLimit', -1);
 ```
 
 
-##### Pthreads Context Flags
+#### Pthreads Context Flags
 
 Users can control the context inheritance mask used to start worker threads by setting the
 `"threadStartFlags"` option as shown here:
@@ -472,14 +472,14 @@ The full list of available flags can be found in the relevant [pthreads document
 
 ### Advanced Usage
 
-##### Stackable Tasks
+#### Stackable Tasks
 
 While Amp abstracts much of the underlying pthreads functionality there are times when low-level
 access is useful. For these scenarios Amp allows the specification of "tasks" extending pthreads
 [`Stackable`][pthreads-stackables]. Stackables allow users to specify arbitrary code in the main
 thread and use it for execution in worker threads.
 
-> **NOTE:**All `Stackable` classes MUST (per pthreads) specify the abstract `Stackable::run()` method
+> **NOTE:** All `Stackable` classes MUST (per pthreads) specify the abstract `Stackable::run()` method
 
 Instances of your custom `Stackable` may then be passed to the `PthreadsDispatcher::execute()` method
 for processing.
@@ -515,7 +515,7 @@ $reactor->run(function() use ($reactor) {
 [pthreads-stackables]: http://us1.php.net/manual/en/class.stackable.php "pthreads Stackable"
 
 
-##### Task Priority
+#### Task Priority
 
 Amp stores tasks in a priority queue allowing applications to prioritize task execution order.
 Priority assignment is only available for task execution (as opposed to `Dispatcher::call()`).
@@ -559,7 +559,7 @@ $reactor->run(function() use ($reactor) {
 ```
 
 
-##### Magic Task Dispatch
+#### Magic Task Dispatch
 
 `ThreadDispatcher` implementations delegate the magic `__invoke` function to the
 `ThreadDispatcher::execute()` method. This provides a simple shortcut method for `execute()` calls:
@@ -585,7 +585,7 @@ $reactor->run(function() use ($reactor) {
 ```
 
 
-##### Fire and Forget
+#### Fire and Forget
 
 Sometimes we don't care whether a task succeeds or fails and we just want to fire it off for
 processing. While it's frequently a bad idea to ignore the possibility of failure, there *are* cases
@@ -617,7 +617,7 @@ $reactor->run(function() use ($reactor) {
 });
 ```
 
-##### Class Autoloading
+#### Class Autoloading
 
 There is no way for pthreads workers to inherit global autoload settings. As a result, if calls
 or task executions require class autoloading users must make provisions to register autoload
