@@ -13,10 +13,8 @@ class Resolver {
             // figure this one out
             // this will be either an array of futures or a FutureGroup returned by:
             // all(), first(), etc.
-        } elseif (isset($result)) {
-            throw new \RuntimeException(
-                sprintf('Only Future instances may be resolved: %s yielded', gettype($result))
-            );
+        } else {
+            $generator->next();
         }
     }
 

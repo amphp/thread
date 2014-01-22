@@ -86,3 +86,25 @@ class TestStreamApp {
     }
 
 }
+
+class NestedFutureTest {
+
+    private $reactor;
+    private $dispatcher;
+
+    function __construct(\Alert\Reactor $reactor, \Amp\PthreadsDispatcher $dispatcher = NULL) {
+        $this->reactor = $reactor;
+        $this->dispatcher = $dispatcher ?: new \Amp\PthreadsDispatcher($reactor);
+    }
+
+    function test() {
+        $promise = new \Amp\Promise;
+        $future = $promise->future();
+
+        $nestedFuture = $this->dispatcher->call('strlen', 'zanzibar');
+        $promise->succeed($nestedFuture);
+
+        return $future;
+    }
+}
+

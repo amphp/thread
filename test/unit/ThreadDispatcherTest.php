@@ -148,33 +148,22 @@ class PthreadsDispatcherTest extends PHPUnit_Framework_TestCase {
             });
         });
     }
-    
+
     public function testStreamingResult() {
         $this->expectOutputString("1\n2\n3\n4\n");
         $reactor = new NativeReactor;
         $reactor->run([new TestStreamApp($reactor), 'test']);
     }
 
+    public function testNestedFutureResolution() {
+        $reactor = new NativeReactor;
+        $reactor->run(function() use ($reactor) {
+            $test = new NestedFutureTest($reactor);
+            $test->test()->onComplete(function($future) use ($reactor) {
+                $this->assertEquals(8, $future->value());
+                $reactor->stop();
+            });
+        });
+    }
+
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

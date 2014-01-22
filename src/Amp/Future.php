@@ -194,7 +194,7 @@ class Future {
         $this->result = $result;
 
         if ($this->onSuccess) {
-            call_user_func($this->onSuccess($result));
+            call_user_func($this->onSuccess, $result);
         } elseif ($this->onComplete) {
             call_user_func($this->onComplete, $this);
         }
