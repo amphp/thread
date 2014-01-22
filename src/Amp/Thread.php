@@ -4,19 +4,21 @@ namespace Amp;
 
 class Thread extends \Worker {
 
-    const SUCCESS = '1';
-    const FAILURE = '0';
-    const FATAL = '-';
-    const PARTIAL = '+';
-    const FORGET = '*';
+    const SUCCESS = '$';
+    const FAILURE = '!';
+    const FATAL = 'x';
+    const STREAM_START = '[';
+    const STREAM_DATA = '=';
+    const STREAM_END = ']';
 
-    private $sharedData;
+    private $results;
+    private $resultCodes;
     private $ipcUri;
     private $ipcSocket;
-    private $lastTaskResultCode;
 
-    public function __construct(SharedData $sharedData, $ipcUri) {
-        $this->sharedData = $sharedData;
+    public function __construct(SharedData $results, SharedData $resultCodes, $ipcUri) {
+        $this->results = $results;
+        $this->resultCodes = $resultCodes;
         $this->ipcUri = $ipcUri;
     }
 
@@ -46,25 +48,24 @@ class Thread extends \Worker {
             case self::SUCCESS: break;
             case self::FAILURE: break;
             case self::FATAL: break;
-            case self::FORGET: break;
+            case self::STREAM_START: break;
+            case self::STREAM_DATA: break;
+            case self::STREAM_END: break;
             default:
-                $resultCode = self::FAILURE;
-                $data = sprintf('Stackable task registered unknown result code: %s', $resultCode);
+                $data = sprintf('Unknown task result code: %s', $resultCode);
+                $resultCode = self::FATAL;
         }
 
-        $this->lastTaskResultCode = $resultCode;
-        $this->sharedData[] = $data;
+        $this->results[] = $data;
+        $this->resultCodes[] = $resultCode;
     }
 
     private function completedPreviousTask() {
-        return isset($this->lastTaskResultCode);
+        return ($resultCount = count($this->results)) && $resultCount === count($this->resultCodes);
     }
 
     private function notifyDispatcher() {
-        $resultCode = $this->lastTaskResultCode;
-        $this->lastTaskResultCode = NULL;
-
-        if (!fwrite($this->ipcSocket, $resultCode)) {
+        if (!fwrite($this->ipcSocket, '.')) {
             throw new \RuntimeException(
                 "Failed writing to IPC socket"
             );

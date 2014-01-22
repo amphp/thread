@@ -76,7 +76,6 @@ $ php composer.phar require rdlowrey/amp:0.4.*
 * [Stackable Tasks](#stackable-tasks)
 * [Task Priority](#task-priority)
 * [Magic Tasks](#magic-tasks)
-* [Fire and Forget](#fire-and-forget)
 * [Class Autoloading](#class-autoloading)
 
 
@@ -584,38 +583,6 @@ $reactor->run(function() use ($reactor) {
 });
 ```
 
-
-#### Fire and Forget
-
-Sometimes we don't care whether a task succeeds or fails and we just want to fire it off for
-processing. While it's frequently a bad idea to ignore the possibility of failure, there *are* cases
-where this behavior makes sense.
-
-To this end `Amp` provides the `PthreadsDispatcher::forget()` method. It works *exactly* the same as
-the `PthreadsDispatcher::stack()` method except that it does not notify the caller of success or
-failure upon completion. The code is simply executed and forgotten. Tasks dispatched via the
-`forget()` method are queued and prioritized in the same way as any other task. The only difference
-is the lack of a result callback. Consider:
-
-```php
-<?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
-
-class MyForgetableTask extends \Stackable {
-    public function run() {
-        // do something here
-    }
-}
-
-$reactor = (new ReactorFactory)->select();
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
-    $dispatcher->forget(new MyForgetableTask);
-    $dispatcher->call('sleep', 1, function() use ($reactor) {
-        $reactor->stop();
-    });
-});
-```
 
 #### Class Autoloading
 

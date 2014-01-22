@@ -33,3 +33,56 @@ class TestAutoloaderStackable extends \Stackable {
         });
     }
 }
+
+class TestStreamStackable extends \Stackable {
+    function run() {
+        $this->worker->registerResult(\Amp\Thread::STREAM_START, 1);
+        $this->worker->registerResult(\Amp\Thread::STREAM_DATA, 2);
+        $this->worker->registerResult(\Amp\Thread::STREAM_DATA, 3);
+        $this->worker->registerResult(\Amp\Thread::STREAM_END, 4);
+    }
+}
+
+class TestStreamApp {
+
+    private $reactor;
+    private $dispatcher;
+    private $resolver;
+
+    function __construct(
+        Alert\Reactor $reactor = NULL,
+        Amp\PthreadsDispatcher $dispatcher = NULL,
+        Amp\Resolver $resolver = NULL
+    ) {
+        $this->reactor = $reactor ?: (new \Alert\ReactorFactory)->select();
+        $this->dispatcher = $dispatcher ?: new \Amp\PthreadsDispatcher($this->reactor);
+        $this->resolver = $resolver ?: new \Amp\Resolver;
+    }
+
+    function test() {
+        $this->dispatcher->execute(new TestStreamStackable)->onComplete(function($future) {
+            $this->stream($future->value());
+        });
+    }
+
+    private function stream(\Amp\FutureStream $stream) {
+        $this->resolver->resolve($this->iterateOverStream($stream));
+    }
+
+    private function iterateOverStream($stream) {
+        foreach ($stream as $future) {
+            if (!$future instanceof \Amp\Future) {
+                $valueToOutput = $future;
+            } elseif ($future->isPending()) {
+                $valueToOutput = (yield $future);
+            } else {
+                $valueToOutput = $future->value();
+            }
+
+            echo $valueToOutput, "\n";
+        }
+
+        $this->reactor->stop();
+    }
+
+}

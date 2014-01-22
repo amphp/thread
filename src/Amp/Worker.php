@@ -6,11 +6,13 @@ class Worker {
     public $id;
     public $ipcClient;
     public $ipcReadWatcher;
-    public $sharedData;
+    public $results;
+    public $resultCodes;
     public $thread;
     public $task;
-    public $taskNotifier;
-    public $taskId;
-    public $afterTask;
+    public $promise;
+    public $future;
+    public $stream;
+    public $streamInjector;
     public $tasksExecuted = 0;
 }

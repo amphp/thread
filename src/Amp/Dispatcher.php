@@ -12,27 +12,15 @@ interface Dispatcher extends \Countable {
     /**
      * Dispatch a task to the thread pool
      *
-     * The final argument to Dispatcher::call must be a valid callback to which the Dispatcher will
-     * pass the CallResult upon completion.
-     *
-     * Though it can't be contracted in an interface, API users should expect Dispatcher::call to
-     * return a unique integer identifying the dispatched task. If the Dispatcher cannot fulfill the
-     * task due to load a zero value (0) should be returned to allow boolean logic.
+     * Implementors SHOULD auto-start the thread pool if workers have not been spawned when this
+     * method is invoked.
      *
      * @param string $procedure The name of the function to invoke
-     * @param mixed $varArgsAndCallback A variable-length argument list to pass the procedure
-     * @param callable $onResult The final argument is the callable to invoke with the invocation result
-     * @return int Returns a unique integer task ID identifying this task
+     * @param mixed $varArgs A variable-length argument list to pass the procedure
+     * @throws \InvalidArgumentException if the final parameter is not a valid callback
+     * @return \Amp\Future
      */
-    function call($procedure, $varArgsAndCallback /*..., $argN, callable $onResult*/);
-
-    /**
-     * Cancel a previously dispatched task
-     *
-     * @param int $taskId The task to be cancelled
-     * @return bool Return TRUE if the specified task existed and was cancelled, FALSE otherwise.
-     */
-    function cancel($taskId);
+    function call($procedure, $varArgs = NULL);
 
     /**
      * Retrieve a count of all outstanding tasks (queued and in-progress)

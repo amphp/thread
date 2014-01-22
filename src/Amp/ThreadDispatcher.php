@@ -8,10 +8,10 @@ interface ThreadDispatcher extends Dispatcher {
      * Dispatch a Stackable task to the thread pool for processing
      *
      * @param \Stackable $task
-     * @param callable $onResult
-     * @return int Returns a unique integer task ID identifying this call
+     * @param int $priority
+     * @return \Amp\Future
      */
-    function execute(\Stackable $task, callable $onResult);
+    function execute(\Stackable $task, $priority = 50);
 
     /**
      * Allow threaded Stackable execution via magic __invoke()
@@ -19,9 +19,9 @@ interface ThreadDispatcher extends Dispatcher {
      * This method is an analog for ThreadDispatcher::execute()
      *
      * @param \Stackable $task
-     * @param callable $onResult
-     * @return int Returns a unique integer task ID identifying this call
+     * @param int $priority
+     * @return \Amp\Future
      */
-    function __invoke(\Stackable $task, callable $onResult);
+    function __invoke(\Stackable $task, $priority = 50);
 
 }
