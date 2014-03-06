@@ -13,11 +13,9 @@
   ],
   "require": {
     "php": ">=5.4.0",
-    "rdlowrey/alert": "~0.3.0"
+    "rdlowrey/alert": "~0.4.0"
   },
   "autoload": {
-    "psr-0": {
-      "Amp": "src/"
-    }
+    "files": ["src/bootstrap.php"]
   }
 }

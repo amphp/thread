@@ -2,19 +2,17 @@ AMP: Async Multiprocessing in PHP (5.4+)
 ----------------------------------------
 
 Amp parallelizes synchronous PHP function calls to worker thread pools in non-blocking applications.
-Its goal is to expose the full retinue of blocking PHP code to non-blocking environments. The library
-allows developers to write synchronous code which is then dispatched to worker threads where it is
-executed asynchronously with results returned upon completion. This functionality is exposed in an
-OS-agnostic manner via the [pthreads extension][pthreads].
+The library dispatches blocking calls to worker threads where they can execute in parallel and
+returns results asynchronously upon completion. All functionality is exposed in an OS-agnostic
+manner by way of the [ext/pthreads][pthreads] extension.
 
 **Problem Domain**
 
-PHP has a broad catalog of synchronous libraries and extensions. However, it's often difficult to
-find non-blocking libs to use inside our event loop. Beyond this limitation, there are common tasks
+PHP has a cast catalog of synchronous libraries and extensions. However, it's generally hard to
+find non-blocking libs for use inside event loops. Beyond this limitation, there are common tasks
 (like filesystem IO) which don't play nice with the non-blocking paradigm. Unfortunately, threading
 is an altogether different approach to concurrency from that used in non-blocking applications.
-Amp's goal is to seemlessly expose access to threaded concurrency inside non-blocking PHP
-applications.
+Amp seemlessly exposes threaded concurrency inside non-blocking PHP applications.
 
 
 ### Project Goals
@@ -25,8 +23,8 @@ applications.
 
 ### Requirements
 
-* [PHP 5.4+][php-net] You'll need PHP, of course.
-* [`ext/pthreads`][pthreads] The pthreads extension ([windows .DLLs here][win-pthreads-dlls])
+* [PHP 5.4+][php-net] You'll need PHP.
+* [ext/pthreads][pthreads] The pthreads extension ([windows .DLLs here][win-pthreads-dlls])
 * [rdlowrey/alert][alert] Alert IO/events (retrieved automatically with `$ git clone --recursive`)
 
 [php-net]: http://php.net "php.net"
@@ -65,7 +63,6 @@ $ php composer.phar require rdlowrey/amp:0.4.*
 * [Static Methods](#static-methods)
 * [Magic Calls](#magic-calls)
 * [Error Handling](#error-handling)
-* [Task Cancellation](#task-cancellation)
 * [Task Timeouts](#task-timeouts)
 * [Pool Size](#pool-size)
 * [Thread Execution Limits](#thread-execution-limits)
@@ -74,7 +71,6 @@ $ php composer.phar require rdlowrey/amp:0.4.*
 **Advanced Usage**
 
 * [Stackable Tasks](#stackable-tasks)
-* [Task Priority](#task-priority)
 * [Magic Tasks](#magic-tasks)
 * [Class Autoloading](#class-autoloading)
 
@@ -88,12 +84,12 @@ $ php composer.phar require rdlowrey/amp:0.4.*
 Executing code inside an event loop allows us to use non-blocking libraries to perform many IO
 operations at the same time. Instead of waiting for each individual operation to complete the event
 loop assumes program flow and informs us when our tasks finish or actionable events occur. This
-paradigm allows our program to execute code when it would otherwise be idling to wait for slow IO
-operations to return. The non-blocking approach is particularly useful for scalable network
-applications and servers where the naive thread-per-connection approach is untenable.
+paradigm allows programs to execute other instructions when they would otherwise waste cycle waiting
+for slow IO operations to complete. The non-blocking approach is particularly useful for scalable
+network applications and servers where the naive thread-per-connection approach is untenable.
 
 Unfortunately, robust applications generally require synchronous functionality and/or filesystem
-operations that can't utilize non-blocking descriptors. Amp was created to provide non-blocking
+operations that can't behave in a non-blocking manner. Amp was created to provide non-blocking
 applications access to the full range of synchronous PHP functionality without blocking the main
 event loop.
 
@@ -102,7 +98,7 @@ event loop.
 
 Because Amp executes inside an event loop, you'll see all of the following examples create a new
 event reactor instance to kick things off. Once the event reactor is started it assumes program
-control and *will not* return this control until your application calls `Reactor::stop()`.
+control and *will not* return control until your application calls `Reactor::stop()`.
 
 
 
@@ -115,7 +111,8 @@ The simplest way to use Amp is to dispatch calls to global functions:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+
+use Alert\Future, Alert\ReactorFactory, Amp\Dispatcher;
 
 // Get an event reactor
 $reactor = (new ReactorFactory)->select();
@@ -123,38 +120,41 @@ $reactor = (new ReactorFactory)->select();
 // Start the event loop and tell it to execute this closure immediately
 $reactor->run(function() use ($reactor) {
 
-    // Create our PthreadsDispatcher using the event reactor
-    $dispatcher = new PthreadsDispatcher($reactor);
+    // Create our Dispatcher using the event reactor
+    $dispatcher = new Dispatcher($reactor);
 
     // Invoke strlen('zanzibar') in a worker thread and
     // notify our callback when the result comes back
-    $dispatcher->call('strlen', 'zanzibar!', function($result) use ($reactor) {
-        printf("Woot! strlen('zanzibar) === %d", $result->getResult());
+    $future = $dispatcher->call('strlen', 'zanzibar!');
+    $future->onSuccess(function(Future $f) use ($reactor) {
+        printf("Woot! strlen('zanzibar') === %d", $f->getValue());
         $reactor->stop();
     });
 
 });
 ```
 
-The above example will output the following to our console:
+The above example outputs the following to our console:
 
 ```
 Woot! strlen('zanzibar') === 8
 ```
 
-Obviously `strlen` is a spurious use of a thread. Remember that it only makes sense to dispatch work
-to a thread if the processing overhead of sending the call and receiving the result is less expensive
-than the actual time of the call. A more useful example demonstrates retrieving a filesystem resource:
+Obviously, the `strlen` call here is a spurious use of threaded concurrency; remember that it only
+ever makes sense to dispatch work to a thread if the processing overhead of sending the call and
+receiving the result is outweighed by the time that would otherwise be spent waiting for the result.
+A more useful example demonstrates retrieving the contents of a filesystem resource:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
-    $dispatcher->call('file_get_contents', '/path/to/file', function($result) use ($reactor) {
-        var_dump($result->getResult());
+    $dispatcher = new Dispatcher($reactor);
+    $future = $dispatcher->call('file_get_contents', '/path/to/file');
+    $future->onSuccess(function(Future $f) use ($reactor) {
+        var_dump($f->getValue());
         $reactor->stop();
     });
 });
@@ -166,12 +166,12 @@ our main thread upon completion.
 
 #### Userland Functions
 
-We aren't limited to native functions. The `Amp\PthreadsDispatcher` can dispatch calls to userland
+We aren't limited to native functions. The `Amp\Dispatcher` can dispatch calls to userland
 functions just as easily. Consider:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
 
 function multiply($x, $y) {
     return $x * $y;
@@ -179,9 +179,10 @@ function multiply($x, $y) {
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
-    $dispatcher->call('multiply', 6, 7, function($result) use ($reactor) {
-        var_dump($result->getResult());
+    $dispatcher = new Dispatcher($reactor);
+    $future = $dispatcher->call('multiply', 6, 7);
+    $future->onSuccess(function(Future $f) use ($reactor) {
+        var_dump($f->getValue());
         $reactor->stop();
     });
 });
@@ -201,7 +202,7 @@ names. We can also dispatch calls to static class methods:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
 
 class MyMultiplier {
     public static function multiply($x, $y) {
@@ -211,9 +212,10 @@ class MyMultiplier {
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
-    $dispatcher->call('MyMultiplier::multiply', 6, 7, function($result) use ($reactor) {
-        var_dump($result->getResult());
+    $dispatcher = new Dispatcher($reactor);
+    $future = $dispatcher->call('MyMultiplier::multiply', 6, 7);
+    $future->onSuccess(function(Future $f) use ($reactor) {
+        var_dump($f->getValue());
         $reactor->stop();
     });
 });
@@ -239,13 +241,14 @@ namespace. Consider:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
-    $dispatcher->fopen('/path/to/file', 'r' function($result) use ($reactor) {
-        $fileHandle = $result->getResult();
+    $dispatcher = new Dispatcher($reactor);
+    $future = $dispatcher->fopen('/path/to/file', 'r');
+    $future->onSuccess(function(Future $f) use ($reactor) {
+        $fileHandle = $f->getValue();
         $reactor->stop();
     });
 });
@@ -254,42 +257,39 @@ $reactor->run(function() use ($reactor) {
 The above code opens a read-only file handle to the specified file and returns the result in
 our main thread upon completion.
 
-> **NOTE:** This example successfully returns a resource from the worker thread. However, resources
-> are very finicky with pthreads. To learn more about resource passing please read the
-> [Pthreads Pitfalls](#pthreads-pitfalls) section.
-
 
 #### Error Handling
 
-You should have noticed that our examples to this point have not returned results directly. Instead,
-they return an instance of `Amp\DispatcherResult`. These wrapper objects allow us to distinguish
+You may have noticed that our examples to this point have not returned results directly. Instead,
+they return an instance of `Alert\Future`. These monadic placeholder objects allow us to distinguish
 between successful results and errors. The most important thing to remember is this:
 
-> Calling `DispatcherResult::getResult()` will throw in the main thread if execution encountered a
+> Calling `Future::getValue()` will throw in the main thread if execution encountered a
 > fatal error inside the worker thread.
 
 This behavior makes it impossible to ignore execution failures. Of course, we can easily determine
-if a call failed using the `DispatcherResult::succeeded()` and `DispatcherResult::failed()` methods.
+if a call failed using the `Future::succeeded()` and `Future::failed()` convenience methods.
 Consider the following examples ...
 
 **Uncaught Exception**
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
 
 function myThrowingFunction() {
-    throw new RuntimeException('oh noes!!!');
+    throw new \RuntimeException('oh noes!!!');
 }
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
-    $dispatcher->myThrowingFunction(function($result) use ($reactor) {
-        var_dump($result->failed()); // bool(true)
-        var_dump($result->getError() instanceof Exception); // bool(true)
+    $dispatcher = new Dispatcher($reactor);
+    $future = $dispatcher->myThrowingFunction();
+    $future->onComplete(function(Future $f) use ($reactor) {
+        var_dump($f->failed()); // bool(true)
+        var_dump($f->getError() instanceof Exception); // bool(true)
         try {
-            $var = $result->getResult();
+            $var = $f->getValue();
         } catch (Exception $e) {
             printf("Task result failed:\n\n%s", $e);
         }
@@ -302,11 +302,11 @@ $reactor->run(function() use ($reactor) {
 
 In the following example we purposefully do something that will generate a fatal error in our
 worker thread. Pthreads (and Amp) recover from this condition automatically. There is no need to
-restart the thread pool. Our main thread seamlessly continues execution:
+restart the thread pool and our main thread seamlessly recovers:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
 
 function myFatalFunction() {
     $var = $nonexistentObject->nonexistentMethod();
@@ -314,48 +314,13 @@ function myFatalFunction() {
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
-    $dispatcher->myFatalFunction(function($result) use ($reactor) {
-        var_dump($result->failed()); // bool(true)
-        echo $result->getError(); // view the error traceback
+    $dispatcher = new Dispatcher($reactor);
+    $future = $dispatcher->myFatalFunction();
+    $future->onComplete(function(Future $f) use ($reactor) {
+        var_dump($f->failed()); // bool(true)
+        echo $f->getError(); // view the error traceback
         $reactor->stop();
     });
-});
-```
-
-#### Task Cancellation
-
-All calls return a unique integer task ID referencing the call. We can use this ID to cancel a
-dispatched call at any time prior to completion via `Dispatcher::cancel()`. If a call is cancelled
-it *WILL NOT* have its callback invoked. The Dispatcher will simply behave as if the call had never
-been made. Consider:
-
-```php
-<?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
-
-function multiply($x, $y) {
-    return $x * $y;
-}
-
-$reactor = (new ReactorFactory)->select();
-
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
-    $dispatcher->setOption('poolSize', 1);
-
-    // Call a sleep function that takes forever to return
-    $slowTaskId = $dispatcher->sleep(9999, function(){});
-
-    // Queue another function behind the sleep() call
-    $dispatcher->multiply(6, 7, function($result) use ($reactor) {
-        var_dump($result->getResult()); // int(42)
-        $reactor->stop();
-    });
-
-    // Cancel the slow task so that the other tasks
-    // queued behind it can execute:
-    $dispatcher->cancel($slowTaskId);
 });
 ```
 
@@ -363,36 +328,36 @@ $reactor->run(function() use ($reactor) {
 
 > **NOTE:** Relying on timeouts is almost always a poor design decision. You're much better served
 > to solve the underlying problem that causes slow execution in your dispatched calls/tasks. This
-> timeout functionality should primarily be used in server environments where very long-running
-> tasks can become a potential DoS vector.
+> timeout functionality should primarily be used in server environments where long-running tasks
+> could become a DoS attack vector.
 
-In the example on [Task Cancellation](#task-cancellation) we demonstrated how to cancel a
-long-running task. Manual timeout management is not necessary, however, as the `Amp\PthreadsDispatcher`
-automatically times out tasks exceeding the maximum allowed run-time. We can configure this setting
-as shown in the following example:
+Amp automatically times out tasks exceeding the (configurable) maximum allowed run-time. We can
+customize this setting as shown in the following example:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
+    $dispatcher = new Dispatcher($reactor);
 
     // Only use one worker so our thread pool acts like a FIFO job queue
-    $dispatcher->setOption('poolSize', 1);
+    $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE, 1);
 
     // Limit per-call execution time to 2 seconds
-    $dispatcher->setOption('taskTimeout', 2);
+    $dispatcher->setOption(Dispatcher::OPT_TASK_TIMEOUT, 2);
 
-    // This function will be timed out after two seconds
-    $slowTaskId = $dispatcher->sleep(9999, function($result) {
-        var_dump($result->failed()); // bool(true)
+    // This function will timeout after two seconds
+    $future = $dispatcher->sleep(9999);
+    $future->onFailure(function(Future $f) {
+        var_dump($f->failed()); // bool(true)
     });
 
     // Queue another function behind the sleep() call
-    $dispatcher->multiply(6, 7, function($result) use ($reactor) {
-        var_dump($result->getResult()); // int(42)
+    $future = $dispatcher->multiply(6, 7);
+    $future->onComplete(function(Future $f) use ($reactor) {
+        var_dump($f->getValue()); // int(42)
         $reactor->stop();
     });
 });
@@ -400,25 +365,23 @@ $reactor->run(function() use ($reactor) {
 
 #### Pool Size
 
-You may have noticed that in some of our previous examples we've explicity set a `"poolSize"` option.
+You may have noticed that in some of our previous examples we've explicity set a pool size option.
 The effect of this setting should be obvious: it controls how many worker threads we spawn to handle
 task dispatches. An example:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Amp\Dispatcher;
 
 $reactor = (new ReactorFactory)->select();
-$dispatcher = new PthreadsDispatcher($reactor);
-$dispatcher->setOption('poolSize', 16);
+$dispatcher = new Dispatcher($reactor);
+$dispatcher->setOption(Dispatcher::OPT_POOL_SIZE, 16);
 ```
 
-By default the `Amp\PthreadsDispatcher` will only spawn one worker thread. In order to spawn more
-this option must be assigned prior to calling the dispatcher's `start()` method (or dispatching a
-call as this automatically calls `start()` to populate the thread pool). Setting this option after
+By default the `Amp\Dispatcher` will only spawn a single worker thread. In order to spawn
+more this option must be assigned prior to calling the dispatcher's `start()` method (or dispatching
+a call as this automatically calls `start()` to populate the thread pool). Setting this option after
 the Dispatcher has started will have no effect.
-
-> **NOTE:** Like the other dispatcher options, `"poolSize"` is NOT case-sensitive.
 
 
 #### Thread Execution Limits
@@ -431,37 +394,37 @@ to modify this setting simply set the relevant option:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Amp\Dispatcher;
 
 $reactor = (new ReactorFactory)->select();
-$dispatcher = new PthreadsDispatcher($reactor);
-$dispatcher->setOption('executionLimit', 1024); // 1024 is the default
+$dispatcher = new Dispatcher($reactor);
+$dispatcher->setOption(Dispatcher::OPT_EXEC_LIMIT, 1024); // 1024 is the default
 ```
 
 Users who wish to remove the execution limit you may set the value to `-1` as shown here:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Amp\Dispatcher;
 
 $reactor = (new ReactorFactory)->select();
-$dispatcher = new PthreadsDispatcher($reactor);
-$dispatcher->setOption('executionLimit', -1);
+$dispatcher = new Dispatcher($reactor);
+$dispatcher->setOption(Dispatcher::OPT_EXEC_LIMIT, -1);
 ```
 
 
 #### Pthreads Context Flags
 
-Users can control the context inheritance mask used to start worker threads by setting the
-`"threadStartFlags"` option as shown here:
+Users can control the context inheritance mask used to start worker threads by setting thread start
+flags as shown here:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Amp\Dispatcher;
 
 $reactor = (new ReactorFactory)->select();
-$dispatcher = new PthreadsDispatcher($reactor);
-$dispatcher->setOption('threadStartFlags', PTHREADS_INHERIT_NONE);
+$dispatcher = new Dispatcher($reactor);
+$dispatcher->setOption(Dispatcher::OPT_THREAD_FLAGS, PTHREADS_INHERIT_NONE);
 ```
 
 The full list of available flags can be found in the relevant [pthreads documentation page][pthreads-flags].
@@ -480,12 +443,12 @@ thread and use it for execution in worker threads.
 
 > **NOTE:** All `Stackable` classes MUST (per pthreads) specify the abstract `Stackable::run()` method
 
-Instances of your custom `Stackable` may then be passed to the `PthreadsDispatcher::execute()` method
+Instances of your custom `Stackable` may then be passed to the `Dispatcher::execute()` method
 for processing.
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
 
 MyTask extends \Stackable {
     public function run() {
@@ -496,16 +459,18 @@ MyTask extends \Stackable {
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
+    $dispatcher = new Dispatcher($reactor);
 
     // Using call() to dispatch strlen('zanzibar')
-    $dispatcher->call('strlen', 'zanzibar', function($result) {
-        assert($result->getResult === 8);
+    $future = $dispatcher->call('strlen', 'zanzibar');
+    $future->onComplete(function(Future $f) {
+        assert($f->getValue() === 8);
     });
 
     // Using execute() to dispatch strlen('zanzibar')
-    $dispatcher->execute(new MyTask, function($result) use ($reactor) {
-        assert($result->getResult === 8);
+    $future = $dispatcher->execute(new MyTask);
+    $future->onComplete(function(Future $f) use ($reactor) {
+        assert($f->getValue() === 8);
         $reactor->stop();
     });
 });
@@ -514,58 +479,15 @@ $reactor->run(function() use ($reactor) {
 [pthreads-stackables]: http://us1.php.net/manual/en/class.stackable.php "pthreads Stackable"
 
 
-#### Task Priority
-
-Amp stores tasks in a priority queue allowing applications to prioritize task execution order.
-Priority assignment is only available for task execution (as opposed to `Dispatcher::call()`).
-
-All priorities are measured on a scale of 1-100. Lower values are executed before higher values. So
-in the following example the `MyCriticalTask` will be dequeued for processing prior to the
-`MyUnimportantTask` if there are more tasks to process than there are available worker threads to
-execute those tasks.
-
-```
-<?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
-
-class MyUnimportantTask extends \Stackable {
-    public function run() {
-        // do something low-priority here
-    }
-}
-
-class MyCriticalTask extends \Stackable {
-    public function run() {
-        // do something VERY important here
-    }
-}
-
-$reactor = (new ReactorFactory)->select();
-
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
-    $dispatcher->execute(new MyUnimportantTask, $onResult = function($result) {
-        // do something with the unimportant result
-    }, $priority = 99);
-    $dispatcher->execute(new MyCriticalTask, $onResult = function($result) {
-        // do something with the critical result
-    }, $priority = 10);
-
-    $dispatcher->call('sleep', 1, function() use ($reactor) {
-        $reactor->stop();
-    });
-});
-```
-
 
 #### Magic Task Dispatch
 
-`ThreadDispatcher` implementations delegate the magic `__invoke` function to the
-`ThreadDispatcher::execute()` method. This provides a simple shortcut method for `execute()` calls:
+`Dispatcher` implementations delegate the magic `__invoke` function to the
+`Dispatcher::execute()` method. This provides a simple shortcut method for `execute()` calls:
 
-```
+```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
 
 class MyTask extends \Stackable {
     public function run() {
@@ -576,8 +498,9 @@ class MyTask extends \Stackable {
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
-    $dispatcher = new PthreadsDispatcher($reactor);
-    $dispatcher(new MyCriticalTask, $onResult = function($result) use ($reactor) {
+    $dispatcher = new Dispatcher($reactor);
+    $future = $dispatcher(new MyCriticalTask);
+    $future->onComplete(function(Future $f) use ($reactor) {
         $reactor->stop();
     });
 });
@@ -597,7 +520,7 @@ for inclusion when workers are spawned via the `"onWorkerStart"` option:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\PthreadsDispatcher;
+use Alert\ReactorFactory, Amp\Dispatcher;
 
 class MyAutoloadTask extends \Stackable {
     public function run() {
@@ -614,8 +537,8 @@ class MyAutoloadTask extends \Stackable {
 }
 
 $reactor = (new ReactorFactory)->select();
-$dispatcher = new PthreadsDispatcher($reactor);
-$dispatcher->setOption('onWorkerStart', new MyAutoloadTask);
+$dispatcher = new Dispatcher($reactor);
+$dispatcher->setOption(Dispatcher::OPT_ON_WORKER_TASK, new MyAutoloadTask);
 ```
 
 Now all our worker threads register class autoloaders prior to receiving tasks or calls.

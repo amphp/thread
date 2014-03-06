@@ -2,6 +2,7 @@ v0.4.0-dev
 ----------
 
 - Major migration to pthreads-only functionality. Previous versions no longer supported.
+- Job server support removed.
 
 #### v0.3.1
 
