@@ -86,7 +86,7 @@ class TestStreamApp {
     private function stream(\Amp\FutureStream $stream) {
         while ($stream->valid()) {
             $future = $stream->current();
-            if ($future->isPending()) {
+            if (!$future->isComplete()) {
                 return $future->onComplete(function() use ($stream) {
                     $this->stream($stream);
                 });

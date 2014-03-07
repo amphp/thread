@@ -36,7 +36,7 @@ class Dispatcher {
     private $maxTaskQueueSize = 1024;
     private $unixIpcSocketDir;
     private $onWorkerStartTasks;
-    private $taskTimeoutCheckInterval = 1;
+    private $timeoutInterval = 1000;
     private $isTimeoutWatcherEnabled = FALSE;
     private $isRejectionEnabled = FALSE;
     private $taskReflection;
@@ -44,7 +44,7 @@ class Dispatcher {
     private $nextId;
     private $now;
     private $isStarted = FALSE;
-
+    
     public function __construct(Reactor $reactor) {
         $this->reactor = $reactor;
         $this->nextId = PHP_INT_MAX * -1;
@@ -324,7 +324,7 @@ class Dispatcher {
             $this->now = microtime(TRUE);
             $this->taskTimeoutWatcher = $this->reactor->repeat(function() {
                 $this->timeoutOverdueTasks();
-            }, $interval = $this->taskTimeoutCheckInterval);
+            }, $this->timeoutInterval);
             $this->isTimeoutWatcherEnabled = TRUE;
         }
     }

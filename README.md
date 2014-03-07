@@ -126,7 +126,7 @@ $reactor->run(function() use ($reactor) {
     // Invoke strlen('zanzibar') in a worker thread and
     // notify our callback when the result comes back
     $future = $dispatcher->call('strlen', 'zanzibar!');
-    $future->onSuccess(function(Future $f) use ($reactor) {
+    $future->onComplete(function(Future $f) use ($reactor) {
         printf("Woot! strlen('zanzibar') === %d", $f->getValue());
         $reactor->stop();
     });
@@ -153,7 +153,7 @@ $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
     $dispatcher = new Dispatcher($reactor);
     $future = $dispatcher->call('file_get_contents', '/path/to/file');
-    $future->onSuccess(function(Future $f) use ($reactor) {
+    $future->onComplete(function(Future $f) use ($reactor) {
         var_dump($f->getValue());
         $reactor->stop();
     });
@@ -181,7 +181,7 @@ $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
     $dispatcher = new Dispatcher($reactor);
     $future = $dispatcher->call('multiply', 6, 7);
-    $future->onSuccess(function(Future $f) use ($reactor) {
+    $future->onComplete(function(Future $f) use ($reactor) {
         var_dump($f->getValue());
         $reactor->stop();
     });
@@ -214,7 +214,7 @@ $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
     $dispatcher = new Dispatcher($reactor);
     $future = $dispatcher->call('MyMultiplier::multiply', 6, 7);
-    $future->onSuccess(function(Future $f) use ($reactor) {
+    $future->onComplete(function(Future $f) use ($reactor) {
         var_dump($f->getValue());
         $reactor->stop();
     });
@@ -247,7 +247,7 @@ $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
     $dispatcher = new Dispatcher($reactor);
     $future = $dispatcher->fopen('/path/to/file', 'r');
-    $future->onSuccess(function(Future $f) use ($reactor) {
+    $future->onComplete(function(Future $f) use ($reactor) {
         $fileHandle = $f->getValue();
         $reactor->stop();
     });
@@ -268,7 +268,7 @@ between successful results and errors. The most important thing to remember is t
 > fatal error inside the worker thread.
 
 This behavior makes it impossible to ignore execution failures. Of course, we can easily determine
-if a call failed using the `Future::succeeded()` and `Future::failed()` convenience methods.
+if a call failed using the `Future::succeeded()` convenience method.
 Consider the following examples ...
 
 **Uncaught Exception**
@@ -286,7 +286,7 @@ $reactor->run(function() use ($reactor) {
     $dispatcher = new Dispatcher($reactor);
     $future = $dispatcher->myThrowingFunction();
     $future->onComplete(function(Future $f) use ($reactor) {
-        var_dump($f->failed()); // bool(true)
+        var_dump($f->succeeded()); // bool(false)
         var_dump($f->getError() instanceof Exception); // bool(true)
         try {
             $var = $f->getValue();
@@ -317,7 +317,7 @@ $reactor->run(function() use ($reactor) {
     $dispatcher = new Dispatcher($reactor);
     $future = $dispatcher->myFatalFunction();
     $future->onComplete(function(Future $f) use ($reactor) {
-        var_dump($f->failed()); // bool(true)
+        var_dump($f->succeeded()); // bool(false)
         echo $f->getError(); // view the error traceback
         $reactor->stop();
     });
@@ -350,8 +350,9 @@ $reactor->run(function() use ($reactor) {
 
     // This function will timeout after two seconds
     $future = $dispatcher->sleep(9999);
-    $future->onFailure(function(Future $f) {
-        var_dump($f->failed()); // bool(true)
+    $future->onComplete(function(Future $f) {
+        var_dump($f->succeeded()); // bool(false)
+        var_dump($f->getError() instanceof Amp\TimeoutException); // bool(true)
     });
 
     // Queue another function behind the sleep() call
@@ -464,12 +465,14 @@ $reactor->run(function() use ($reactor) {
     // Using call() to dispatch strlen('zanzibar')
     $future = $dispatcher->call('strlen', 'zanzibar');
     $future->onComplete(function(Future $f) {
+        assert($f->succeeded());
         assert($f->getValue() === 8);
     });
 
     // Using execute() to dispatch strlen('zanzibar')
     $future = $dispatcher->execute(new MyTask);
     $future->onComplete(function(Future $f) use ($reactor) {
+        assert($f->succeeded());
         assert($f->getValue() === 8);
         $reactor->stop();
     });
@@ -495,11 +498,10 @@ class MyTask extends \Stackable {
     }
 }
 
-
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
     $dispatcher = new Dispatcher($reactor);
-    $future = $dispatcher(new MyCriticalTask);
+    $future = $dispatcher(new MyTask);
     $future->onComplete(function(Future $f) use ($reactor) {
         $reactor->stop();
     });

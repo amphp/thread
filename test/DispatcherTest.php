@@ -56,8 +56,9 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
         $reactor = new NativeReactor;
         $reactor->run(function() use ($reactor) {
             $dispatcher = new Dispatcher($reactor);
-            $dispatcher->call('exception')->onComplete(function($future) use ($reactor) {
-                $this->assertTrue($future->failed());
+            $future = $dispatcher->call('exception');
+            $future->onComplete(function($future) use ($reactor) {
+                $this->assertFalse($future->succeeded());
 
                 // Should throw
                 $future->getValue();
@@ -73,9 +74,10 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
         $reactor = new NativeReactor;
         $reactor->run(function() use ($reactor) {
             $dispatcher = new Dispatcher($reactor);
-            $dispatcher->call('fatal')->onComplete(function($future) use ($reactor) {
-                $this->assertTrue($future->failed());
-                $future->getValue();
+            $future = $dispatcher->call('fatal');
+            $future->onComplete(function($future) use ($reactor) {
+                $this->assertFalse($future->succeeded());
+                $future->getValue(); // <-- should throw
                 $reactor->stop();
             });
         });
@@ -89,11 +91,13 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
 
         // Make sure the second call gets queued
         $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE, 1);
-        $dispatcher->call('usleep', 50000)->onComplete(function($future) use (&$count) {
+        $future1 = $dispatcher->call('usleep', 50000);
+        $future1->onComplete(function() use (&$count) {
             $count++;
         });
 
-        $dispatcher->call('strlen', 'zanzibar')->onComplete(function($future) use ($reactor, &$count) {
+        $future2 = $dispatcher->call('strlen', 'zanzibar');
+        $future2->onComplete(function($future) use ($reactor, &$count) {
             $count++;
             $this->assertEquals(8, $future->getValue());
             $this->assertEquals(2, $count);

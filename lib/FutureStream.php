@@ -60,7 +60,7 @@ class FutureStream implements \Iterator {
     public function next() {
         $current = current($this->futures);
 
-        if ($current && $current instanceof Future && $current->isPending()) {
+        if ($current && $current instanceof Future && !$current->isComplete()) {
             throw new \LogicException(sprintf(
                 'Cannot advance FutureStream at index %d; Future value still pending',
                 $this->position
