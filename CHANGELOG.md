@@ -1,4 +1,4 @@
-v0.4.0-dev
+v0.4.0
 ----------
 
 - Major migration to pthreads-only functionality. Previous versions no longer supported.

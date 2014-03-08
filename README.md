@@ -1,4 +1,4 @@
-AMP: Async Multiprocessing in PHP (5.4+)
+AMP: Async Multi-threading in PHP (5.4+)
 ----------------------------------------
 
 Amp parallelizes synchronous PHP function calls to worker thread pools in non-blocking applications.
