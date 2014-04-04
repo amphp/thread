@@ -4,16 +4,19 @@ AMP: Async Multi-threading in PHP (5.4+)
 Amp parallelizes synchronous PHP function calls to worker thread pools in non-blocking applications.
 The library dispatches blocking calls to worker threads where they can execute in parallel and
 returns results asynchronously upon completion. All functionality is exposed in an OS-agnostic
-manner by way of the [ext/pthreads][pthreads] extension.
+manner by way of the [pthreads][pthreads] extension.
 
 **Problem Domain**
 
-PHP has a cast catalog of synchronous libraries and extensions. However, it's generally hard to
+PHP has a vast catalog of synchronous libraries and extensions. However, it's generally hard to
 find non-blocking libs for use inside event loops. Beyond this limitation, there are common tasks
 (like filesystem IO) which don't play nice with the non-blocking paradigm. Unfortunately, threading
 is an altogether different approach to concurrency from that used in non-blocking applications.
 Amp seemlessly exposes threaded concurrency inside non-blocking PHP applications.
 
+> **NOTE:** Amp isn't really intended for use in a PHP web SAPI environment. It doesn't make sense
+to fire up a new thread pool that internally uses sockets for inter-thread communication on each
+request in a web environment. It really should only be deployed in CLI programs.
 
 ### Project Goals
 
@@ -25,7 +28,7 @@ Amp seemlessly exposes threaded concurrency inside non-blocking PHP applications
 
 * [PHP 5.4+][php-net] You'll need PHP.
 * [ext/pthreads][pthreads] The pthreads extension ([windows .DLLs here][win-pthreads-dlls])
-* [rdlowrey/alert][alert] Alert IO/events (retrieved automatically with `$ git clone --recursive`)
+* [rdlowrey/alert][alert] Alert IO/events (retrieved automatically with `$ git clone --recursive` or composer install)
 
 [php-net]: http://php.net "php.net"
 [pthreads]: http://pecl.php.net/package/pthreads "pthreads"
