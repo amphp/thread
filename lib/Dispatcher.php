@@ -44,7 +44,7 @@ class Dispatcher {
     private $nextId;
     private $now;
     private $isStarted = FALSE;
-    
+
     public function __construct(Reactor $reactor) {
         $this->reactor = $reactor;
         $this->nextId = PHP_INT_MAX * -1;
@@ -620,7 +620,7 @@ class Dispatcher {
      *
      * @return int
      */
-    function count() {
+    public function count() {
         return $this->cachedQueueSize;
     }
 
