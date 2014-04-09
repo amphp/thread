@@ -90,7 +90,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
         $count = 0;
 
         // Make sure the second call gets queued
-        $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE, 1);
+        $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
         $future1 = $dispatcher->call('usleep', 50000);
         $future1->onComplete(function() use (&$count) {
             $count++;
@@ -114,7 +114,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
             $dispatcher = new Dispatcher($reactor);
 
             // Make sure repeated calls get queued behind the first call
-            $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE, 1);
+            $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
 
             // Something semi-slow that will cause subsequent calls to be queued
             $dispatcher->call('usleep', 50000);
@@ -146,7 +146,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
         $reactor->run(function() use ($reactor) {
             $dispatcher = new Dispatcher($reactor);
             $dispatcher->setOption(Dispatcher::OPT_ON_WORKER_TASK, new \TestAutoloaderStackable);
-            $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE, 1);
+            $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
             $future = $dispatcher->call('AutoloadableClass::test');
             $future->onComplete(function($future) use ($reactor, $dispatcher) {
                 $this->assertEquals(42, $future->getValue());

@@ -15,4 +15,5 @@ class Worker {
     public $stream;
     public $streamInjector;
     public $tasksExecuted = 0;
+    public $lastStackedAt;
 }
