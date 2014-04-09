@@ -346,7 +346,7 @@ $reactor->run(function() use ($reactor) {
     $dispatcher = new Dispatcher($reactor);
 
     // Only use one worker so our thread pool acts like a FIFO job queue
-    $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE, 1);
+    $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
 
     // Limit per-call execution time to 2 seconds
     $dispatcher->setOption(Dispatcher::OPT_TASK_TIMEOUT, 2);
@@ -369,7 +369,7 @@ $reactor->run(function() use ($reactor) {
 
 #### Pool Size
 
-You may have noticed that in some of our previous examples we've explicity set a pool size option.
+You may have noticed that in the above timeout example we explicity set a max pool size option.
 The effect of this setting should be obvious: it controls how many worker threads we spawn to handle
 task dispatches. An example:
 
@@ -379,13 +379,28 @@ use Alert\ReactorFactory, Amp\Dispatcher;
 
 $reactor = (new ReactorFactory)->select();
 $dispatcher = new Dispatcher($reactor);
-$dispatcher->setOption(Dispatcher::OPT_POOL_SIZE, 16);
+$dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 16);
 ```
 
-By default the `Amp\Dispatcher` will only spawn a single worker thread. In order to spawn
-more this option must be assigned prior to calling the dispatcher's `start()` method (or dispatching
-a call as this automatically calls `start()` to populate the thread pool). Setting this option after
-the Dispatcher has started will have no effect.
+By default the `Amp\Dispatcher` will only spawn a single worker thread. Each time a call is
+dispatched a new thread will be spawned if all existing workers in the pool are busy (subject to the
+configured max size). The default `OPT_POOL_SIZE_MAX` setting is 8. If no workers are available and
+the pool size is maxed out calls are queued and dispatched as workers become available.
+
+> **NOTE::** Idle worker threads are periodically unloaded to avoid holding open threads
+> unnecessarily.
+
+Dispatchers keep a minimum number of worker threads open at all times (even when idle). By default
+the minimum number of threads kept open is 1. This value may be changed as follows:
+
+```php
+<?php
+use Alert\ReactorFactory, Amp\Dispatcher;
+
+$reactor = (new ReactorFactory)->select();
+$dispatcher = new Dispatcher($reactor);
+$dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MIN, 4);
+```
 
 
 #### Thread Execution Limits
@@ -452,12 +467,15 @@ for processing.
 
 ```php
 <?php
-use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
+use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher, Amp\Thread;
 
 MyTask extends \Stackable {
     public function run() {
-        // Executed when passed to a worker
-        return strlen('zanzibar');
+        $result = strlen('zanzibar');
+
+        // Stackables must register their results using either of the
+        // Amp\Thread::SUCCESS or Amp\Thread::FAILURE codes:
+        $this->worker->registerResult(Thread::SUCCESS, $result);
     }
 }
 

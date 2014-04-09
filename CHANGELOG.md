@@ -1,5 +1,19 @@
+v0.5.0
+------
+
+- Pool size is now elastic subject to min/max size configuration settings
+- Worker threads exceeding the idle timeout (since last processing activity) are
+  now automatically unloaded to scale thread pool size back when not under load.
+- New option constants:
+    - `Dispatcher::OPT_POOL_SIZE_MIN`
+    - `Dispatcher::OPT_POOL_SIZE_MAX`
+    - `Dispatcher::OPT_IDLE_WORKER_TIMEOUT` (seconds)
+- Updated rdlowrey\Alert dependency to latest
+- Default worker thread task execution limit before recycling is now 2048 (was 1024)
+- Performance improvements when tasks are rejected due to excessive load
+
 v0.4.0
-----------
+------
 
 - Major migration to pthreads-only functionality. Previous versions no longer supported.
 - Job server support removed.

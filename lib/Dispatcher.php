@@ -2,16 +2,18 @@
 
 namespace Amp;
 
-use Alert\Reactor, Alert\Promise, Alert\Future;
+use Alert\Reactor, Alert\Promise, Alert\Future, Alert\Failure;
 
 class Dispatcher {
     const OPT_ON_WORKER_TASK = 1;
     const OPT_THREAD_FLAGS = 2;
-    const OPT_POOL_SIZE = 3;
-    const OPT_TASK_TIMEOUT = 4;
-    const OPT_EXEC_LIMIT = 5;
-    const OPT_IPC_URI = 6;
-    const OPT_UNIX_IPC_DIR = 7;
+    const OPT_POOL_SIZE_MIN = 3;
+    const OPT_POOL_SIZE_MAX = 4;
+    const OPT_TASK_TIMEOUT = 5;
+    const OPT_IDLE_WORKER_TIMEOUT = 6;
+    const OPT_EXEC_LIMIT = 7;
+    const OPT_IPC_URI = 8;
+    const OPT_UNIX_IPC_DIR = 9;
 
     private $reactor;
     private $ipcUri;
@@ -20,25 +22,26 @@ class Dispatcher {
     private $workers = [];
     private $pendingIpcClients = [];
     private $pendingWorkers = [];
+    private $pendingWorkerCount = 0;
     private $availableWorkers = [];
-    private $cachedQueueSize = 0;
-    private $rejectedTasks = [];
+    private $outstandingTaskCount = 0;
     private $queue = [];
     private $promises = [];
     private $promiseWorkerMap = [];
     private $promiseTimeoutMap = [];
-    private $taskTimeoutWatcher;
-    private $taskRejector;
+    private $timeoutWatcher;
     private $threadStartFlags = PTHREADS_INHERIT_ALL;
-    private $poolSize = 1;
+    private $poolSize = 0;
+    private $poolSizeMin = 1;
+    private $poolSizeMax = 8;
     private $taskTimeout = 30;
-    private $executionLimit = 1024;
+    private $executionLimit = 2048;
     private $maxTaskQueueSize = 1024;
     private $unixIpcSocketDir;
     private $onWorkerStartTasks;
-    private $timeoutInterval = 1000;
-    private $isTimeoutWatcherEnabled = FALSE;
-    private $isRejectionEnabled = FALSE;
+    private $periodTimeoutInterval = 1000;
+    private $idleWorkerTimeout = 1;
+    private $isPeriodWatcherEnabled = FALSE;
     private $taskReflection;
     private $taskNotifier;
     private $nextId;
@@ -50,7 +53,6 @@ class Dispatcher {
         $this->nextId = PHP_INT_MAX * -1;
         $this->onWorkerStartTasks = new \SplObjectStorage;
         $this->taskReflection = new \ReflectionClass('Amp\Task');
-        $this->taskRejector = function() { $this->processTaskRejections(); };
         $this->taskNotifier = new TaskNotifier;
     }
 
@@ -69,15 +71,17 @@ class Dispatcher {
             throw new \InvalidArgumentException(
                 sprintf('%s requires a string at Argument 1', __METHOD__)
             );
-        } elseif (!$this->isStarted) {
+        }
+
+        if (!$this->isStarted) {
             $this->start();
         }
 
-        if ($this->maxTaskQueueSize < 0 || $this->maxTaskQueueSize > $this->cachedQueueSize) {
+        if ($this->maxTaskQueueSize < 0 || $this->maxTaskQueueSize > $this->outstandingTaskCount) {
             $task = $this->taskReflection->newInstanceArgs(func_get_args());
             $future = $this->acceptNewTask($task);
         } else {
-            $future = $this->rejectTask();
+            $future = new Failure(new TooBusyException);
         }
 
         return $future;
@@ -96,10 +100,10 @@ class Dispatcher {
             $this->start();
         }
 
-        if ($this->maxTaskQueueSize < 0 || $this->maxTaskQueueSize > $this->cachedQueueSize) {
+        if ($this->maxTaskQueueSize < 0 || $this->maxTaskQueueSize > $this->outstandingTaskCount) {
             $future = $this->acceptNewTask($task);
         } else {
-            $future = $this->rejectTask();
+            $future = new Failure(new TooBusyException);
         }
 
         return $future;
@@ -108,25 +112,24 @@ class Dispatcher {
     private function acceptNewTask(\Stackable $task) {
         $promise = new Promise;
         $promiseId = $this->nextId++;
-
         $this->queue[$promiseId] = [$promise, $task];
-        $this->cachedQueueSize++;
+        $this->outstandingTaskCount++;
 
-        $canTimeout = $this->taskTimeout > -1;
-
-        if ($canTimeout && !$this->isTimeoutWatcherEnabled) {
+        if ($this->isPeriodWatcherEnabled === FALSE) {
             $this->now = microtime(TRUE);
-            $this->reactor->enable($this->taskTimeoutWatcher);
-            $this->isTimeoutWatcherEnabled = TRUE;
-            $timeoutAt = $this->taskTimeout + $this->now;
-            $this->promiseTimeoutMap[$promiseId] = $timeoutAt;
-        } elseif ($canTimeout) {
+            $this->reactor->enable($this->timeoutWatcher);
+            $this->isPeriodWatcherEnabled = TRUE;
+        }
+
+        if ($this->taskTimeout > -1) {
             $timeoutAt = $this->taskTimeout + $this->now;
             $this->promiseTimeoutMap[$promiseId] = $timeoutAt;
         }
 
         if ($this->availableWorkers) {
             $this->dequeueNextTask();
+        } elseif (($this->poolSize + $this->pendingWorkerCount) < $this->poolSizeMax) {
+            $this->spawnWorker();
         }
 
         return $promise->getFuture();
@@ -147,27 +150,7 @@ class Dispatcher {
         $worker->task = $task;
         $worker->thread->stack($task);
         $worker->thread->stack($this->taskNotifier);
-    }
-
-    private function rejectTask() {
-        $promise = new Promise;
-
-        $this->rejectedTasks[] = $promise;
-
-        if (!$this->isRejectionEnabled) {
-            $this->isRejectionEnabled = TRUE;
-            $this->reactor->immediately($this->taskRejector);
-        }
-
-        return $promise->getFuture();
-    }
-
-    private function processTaskRejections() {
-        $this->isRejectionEnabled = FALSE;
-        foreach ($this->rejectedTasks as $promise) {
-            $promise->fail(new TooBusyException);
-        }
-        $this->rejectedTasks = [];
+        $worker->lastStackedAt = $this->now;
     }
 
     /**
@@ -181,7 +164,7 @@ class Dispatcher {
         if (!$this->isStarted) {
             $this->generateIpcServer();
             $this->isStarted = TRUE;
-            for ($i=0;$i<$this->poolSize;$i++) {
+            for ($i=0;$i<$this->poolSizeMin;$i++) {
                 $this->spawnWorker();
             }
             $this->registerTaskTimeoutWatcher();
@@ -246,6 +229,7 @@ class Dispatcher {
         $worker->thread = $thread;
 
         $this->pendingWorkers[$worker->id] = $worker;
+        $this->pendingWorkerCount++;
 
         return $worker;
     }
@@ -293,12 +277,14 @@ class Dispatcher {
     private function importPendingIpcClient($workerId, $ipcClient) {
         $worker = $this->pendingWorkers[$workerId];
         unset($this->pendingWorkers[$workerId]);
+        $this->pendingWorkerCount--;
         $worker->ipcClient = $ipcClient;
         $worker->ipcReadWatcher = $this->reactor->onReadable($ipcClient, function() use ($worker) {
             $this->onReadableIpcClient($worker);
         });
         $this->workers[$workerId] = $worker;
         $this->availableWorkers[$workerId] = $worker;
+        $this->poolSize++;
 
         foreach ($this->onWorkerStartTasks as $task) {
             $worker->thread->stack($task);
@@ -322,17 +308,42 @@ class Dispatcher {
     private function registerTaskTimeoutWatcher() {
         if ($this->taskTimeout > -1) {
             $this->now = microtime(TRUE);
-            $this->taskTimeoutWatcher = $this->reactor->repeat(function() {
-                $this->timeoutOverdueTasks();
-            }, $this->timeoutInterval);
-            $this->isTimeoutWatcherEnabled = TRUE;
+            $this->timeoutWatcher = $this->reactor->repeat(function() {
+                $this->executePeriodTimeouts();
+            }, $this->periodTimeoutInterval);
+            $this->isPeriodWatcherEnabled = TRUE;
         }
     }
 
-    private function timeoutOverdueTasks() {
-        $now = microtime(TRUE);
-        $this->now = $now;
+    private function executePeriodTimeouts() {
+        $this->now = $now = microtime(TRUE);
 
+        if ($this->promiseTimeoutMap) {
+            $this->timeoutOverdueTasks($now);
+        }
+
+        if ($this->availableWorkers && ($this->poolSize > $this->poolSizeMin)) {
+            $this->decrementSuperfluousWorkers($now);
+        }
+    }
+
+    private function decrementSuperfluousWorkers($now) {
+        foreach ($this->availableWorkers as $worker) {
+            $idleTime = $now - $worker->lastStackedAt;
+            if ($idleTime > $this->idleWorkerTimeout) {
+                $this->unloadWorker($worker);
+                // we don't want to unload more than one worker per second, so break; afterwards
+                break;
+            }
+        }
+
+        if ($this->outstandingTaskCount === 0 && $this->poolSize === $this->poolSizeMin) {
+            $this->isPeriodWatcherEnabled = FALSE;
+            $this->reactor->disable($this->timeoutWatcher);
+        }
+    }
+
+    private function timeoutOverdueTasks($now) {
         foreach ($this->promiseTimeoutMap as $promiseId => $timeoutAt) {
             if ($now >= $timeoutAt) {
                 unset($this->promiseTimeoutMap[$promiseId]);
@@ -351,14 +362,14 @@ class Dispatcher {
 
     private function killTask($promiseId, DispatchException $error) {
         if (isset($this->promiseWorkerMap[$promiseId])) {
-            $this->cachedQueueSize--;
+            $this->outstandingTaskCount--;
             $worker = $this->promiseWorkerMap[$promiseId];
             $worker->promise->resolveSafely($error);
             $this->unloadWorker($worker);
             $worker->thread->kill();
             $this->spawnWorker();
         } else {
-            $this->cachedQueueSize--;
+            $this->outstandingTaskCount--;
             list($promise) = $this->queue[$promiseId];
             $promise->resolveSafely($error);
             unset($this->queue[$promiseId]);
@@ -367,6 +378,7 @@ class Dispatcher {
 
     private function unloadWorker(Worker $worker) {
         $this->reactor->cancel($worker->ipcReadWatcher);
+        $this->poolSize--;
 
         unset(
             $this->workers[$worker->id],
@@ -422,7 +434,7 @@ class Dispatcher {
         if ($isStream) {
             $worker->promise->resolve($error, $result);
         } else {
-            $this->cachedQueueSize--;
+            $this->outstandingTaskCount--;
             $worker->tasksExecuted++;
             $worker->promise->resolve($error, $result);
             $this->afterTaskCompletion($worker, $mustKill);
@@ -459,9 +471,6 @@ class Dispatcher {
 
         if ($this->queue && $this->availableWorkers) {
             $this->dequeueNextTask();
-        } elseif ($this->isTimeoutWatcherEnabled && !$this->queue) {
-            $this->isTimeoutWatcherEnabled = FALSE;
-            $this->reactor->disable($this->taskTimeoutWatcher);
         }
     }
 
@@ -493,7 +502,7 @@ class Dispatcher {
         $streamInjector($isFinalStreamElement, $error = NULL, $data);
 
         if ($isFinalStreamElement) {
-            $this->cachedQueueSize--;
+            $this->outstandingTaskCount--;
             $worker->tasksExecuted++;
             $this->afterTaskCompletion($worker, $mustKill);
         } else {
@@ -532,10 +541,14 @@ class Dispatcher {
                 $this->addOnWorkerStartTask($value); break;
             case self::OPT_THREAD_FLAGS:
                 $this->setThreadStartFlags($value); break;
-            case self::OPT_POOL_SIZE:
-                $this->setPoolSize($value); break;
+            case self::OPT_POOL_SIZE_MIN:
+                $this->setPoolSizeMin($value); break;
+            case self::OPT_POOL_SIZE_MAX:
+                $this->setPoolSizeMax($value); break;
             case self::OPT_TASK_TIMEOUT:
                 $this->setTaskTimeout($value); break;
+            case self::OPT_IDLE_WORKER_TIMEOUT:
+                $this->setIdleWorkerTimeout($value); break;
             case self::OPT_EXEC_LIMIT:
                 $this->setExecutionLimit($value); break;
             case self::OPT_IPC_URI:
@@ -550,6 +563,13 @@ class Dispatcher {
 
         return $this;
     }
+    
+    private function setIdleWorkerTimeout($seconds) {
+        $this->idleWorkerTimeout = filter_var($int, FILTER_VALIDATE_INT, ['options' => [
+            'min_range' => 1,
+            'default' => 1
+        ]]);
+    }
 
     private function addOnWorkerStartTask(\Stackable $task) {
         $this->onWorkerStartTasks->attach($task);
@@ -559,10 +579,17 @@ class Dispatcher {
         $this->threadStartFlags = $flags;
     }
 
-    private function setPoolSize($int) {
-        $this->poolSize = filter_var($int, FILTER_VALIDATE_INT, ['options' => [
+    private function setPoolSizeMin($int) {
+        $this->poolSizeMin = filter_var($int, FILTER_VALIDATE_INT, ['options' => [
             'min_range' => 1,
-            'default' => 16
+            'default' => 1
+        ]]);
+    }
+
+    private function setPoolSizeMax($int) {
+        $this->poolSizeMax = filter_var($int, FILTER_VALIDATE_INT, ['options' => [
+            'min_range' => 1,
+            'default' => 8
         ]]);
     }
 
@@ -621,7 +648,7 @@ class Dispatcher {
      * @return int
      */
     public function count() {
-        return $this->cachedQueueSize;
+        return $this->outstandingTaskCount;
     }
 
     /**
@@ -647,7 +674,7 @@ class Dispatcher {
     }
 
     public function __destruct() {
-        $this->reactor->cancel($this->taskTimeoutWatcher);
+        $this->reactor->cancel($this->timeoutWatcher);
 
         foreach ($this->workers as $worker) {
             $this->unloadWorker($worker);
