@@ -536,10 +536,10 @@ There is no way for pthreads workers to inherit global autoload settings. As a r
 or task executions require class autoloading users must make provisions to register autoload
 functions in workers prior to dispatching tasks. This presents the problem of re-registering these
 settings each time a worker thread is respawned. Amp resolves this issue by allowing applications to
-register `Stackable` tasks to send all worker threads when spawned.
+register `Threaded` tasks to send workers whenever they're spawned.
 
-Consider the following example in which we define our own `Stackable` autoload task and register it
-for inclusion when workers are spawned via the `"onWorkerStart"` option:
+Consider the following example in which we define our own autoload task and register it for
+inclusion when workers are spawned:
 
 ```php
 <?php
@@ -561,7 +561,21 @@ class MyAutoloadTask extends \Stackable {
 
 $reactor = (new ReactorFactory)->select();
 $dispatcher = new Dispatcher($reactor);
-$dispatcher->setOption(Dispatcher::OPT_ON_WORKER_TASK, new MyAutoloadTask);
+$dispatcher->addStartTask(new MyAutoloadTask);
 ```
 
-Now all our worker threads register class autoloaders prior to receiving tasks or calls.
+Now all our worker threads register class autoloaders prior to receiving tasks or calls. Note that
+"start tasks" are stored in an `SplObjectStorage` instance, so repeatedly adding the same instance
+will have no effect. After adding a start task you may also remove it in the future as shown here:
+
+```php
+$myStartTask = new MyAutoloadTask;
+
+$reactor = (new ReactorFactory)->select();
+$dispatcher = new Dispatcher($reactor);
+$dispatcher->addStartTask($myStartTask);
+
+// ... //
+
+$dispatcher->removeStartTask($myStartTask);
+```

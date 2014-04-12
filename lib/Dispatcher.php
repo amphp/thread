@@ -5,15 +5,14 @@ namespace Amp;
 use Alert\Reactor, Alert\Promise, Alert\Future, Alert\Failure;
 
 class Dispatcher {
-    const OPT_ON_WORKER_TASK = 1;
-    const OPT_THREAD_FLAGS = 2;
-    const OPT_POOL_SIZE_MIN = 3;
-    const OPT_POOL_SIZE_MAX = 4;
-    const OPT_TASK_TIMEOUT = 5;
-    const OPT_IDLE_WORKER_TIMEOUT = 6;
-    const OPT_EXEC_LIMIT = 7;
-    const OPT_IPC_URI = 8;
-    const OPT_UNIX_IPC_DIR = 9;
+    const OPT_THREAD_FLAGS = 1;
+    const OPT_POOL_SIZE_MIN = 2;
+    const OPT_POOL_SIZE_MAX = 3;
+    const OPT_TASK_TIMEOUT = 4;
+    const OPT_IDLE_WORKER_TIMEOUT = 5;
+    const OPT_EXEC_LIMIT = 6;
+    const OPT_IPC_URI = 7;
+    const OPT_UNIX_IPC_DIR = 8;
 
     private $reactor;
     private $ipcUri;
@@ -38,7 +37,7 @@ class Dispatcher {
     private $executionLimit = 2048;
     private $maxTaskQueueSize = 1024;
     private $unixIpcSocketDir;
-    private $onWorkerStartTasks;
+    private $workerStartTasks;
     private $periodTimeoutInterval = 1000;
     private $idleWorkerTimeout = 1;
     private $isPeriodWatcherEnabled = FALSE;
@@ -51,7 +50,7 @@ class Dispatcher {
     public function __construct(Reactor $reactor) {
         $this->reactor = $reactor;
         $this->nextId = PHP_INT_MAX * -1;
-        $this->onWorkerStartTasks = new \SplObjectStorage;
+        $this->workerStartTasks = new \SplObjectStorage;
         $this->taskReflection = new \ReflectionClass('Amp\Task');
         $this->taskNotifier = new TaskNotifier;
     }
@@ -286,7 +285,7 @@ class Dispatcher {
         $this->availableWorkers[$workerId] = $worker;
         $this->poolSize++;
 
-        foreach ($this->onWorkerStartTasks as $task) {
+        foreach ($this->workerStartTasks as $task) {
             $worker->thread->stack($task);
         }
 
@@ -537,8 +536,6 @@ class Dispatcher {
      */
     public function setOption($option, $value) {
         switch ($option) {
-            case self::OPT_ON_WORKER_TASK:
-                $this->addOnWorkerStartTask($value); break;
             case self::OPT_THREAD_FLAGS:
                 $this->setThreadStartFlags($value); break;
             case self::OPT_POOL_SIZE_MIN:
@@ -563,16 +560,12 @@ class Dispatcher {
 
         return $this;
     }
-    
+
     private function setIdleWorkerTimeout($seconds) {
         $this->idleWorkerTimeout = filter_var($int, FILTER_VALIDATE_INT, ['options' => [
             'min_range' => 1,
             'default' => 1
         ]]);
-    }
-
-    private function addOnWorkerStartTask(\Stackable $task) {
-        $this->onWorkerStartTasks->attach($task);
     }
 
     private function setThreadStartFlags($flags) {
@@ -659,6 +652,28 @@ class Dispatcher {
      */
     public function __invoke(\Stackable $task) {
         return $this->execute($task);
+    }
+
+    /**
+     * Store a worker task to execute each time a worker spawns
+     *
+     * @param \Stackable $task
+     * @return void
+     */
+    public function addStartTask(\Stackable $task) {
+        $this->workerStartTasks->attach($task);
+    }
+
+    /**
+     * Clear a worker task currently stored for execution each time a worker spawns
+     *
+     * @param \Stackable $task
+     * @return void
+     */
+    public function removeStartTask(\Stackable $task) {
+        if ($this->workerStartTasks->contains($task)) {
+            $this->workerStartTasks->detach($task);
+        }
     }
 
     /**

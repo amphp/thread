@@ -145,7 +145,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
         $reactor = new NativeReactor;
         $reactor->run(function() use ($reactor) {
             $dispatcher = new Dispatcher($reactor);
-            $dispatcher->setOption(Dispatcher::OPT_ON_WORKER_TASK, new \TestAutoloaderStackable);
+            $dispatcher->addStartTask(new \TestAutoloaderStackable);
             $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
             $future = $dispatcher->call('AutoloadableClass::test');
             $future->onComplete(function($future) use ($reactor, $dispatcher) {

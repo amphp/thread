@@ -1,3 +1,11 @@
+v0.6.0
+------
+
+- Removed `Dispatcher::OPT_ON_WORKER_TASK` option
+- Worker start tasks are now controlled with the following new methods:
+    - `Dispatcher::addWorkerStartTask(Threaded $task)`
+    - `Dispatcher::removeWorkerStartTask(Threaded $task)`
+
 v0.5.0
 ------
 
