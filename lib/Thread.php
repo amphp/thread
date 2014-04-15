@@ -34,7 +34,7 @@ class Thread extends \Worker {
 
         $openMsg = $this->getThreadId() . "\n";
 
-        if (fwrite($ipcSocket, $openMsg) !== strlen($openMsg)) {
+        if (@fwrite($ipcSocket, $openMsg) !== strlen($openMsg)) {
             throw new \RuntimeException(
                 "Failed writing open message to IPC server"
             );
@@ -65,11 +65,11 @@ class Thread extends \Worker {
     }
 
     private function notifyDispatcher() {
-        if (!fwrite($this->ipcSocket, '.')) {
-            throw new \RuntimeException(
-                "Failed writing to IPC socket"
-            );
+        while (!@fwrite($this->ipcSocket, '.')) {
+            if (!is_resource($this->ipcSocket)) {
+                // Our IPC socket has died somehow ... all we can do now is exit.
+                exit;
+            }
         }
     }
-
 }
