@@ -65,11 +65,9 @@ class Thread extends \Worker {
     }
 
     private function notifyDispatcher() {
-        while (!@fwrite($this->ipcSocket, '.')) {
-            if (!is_resource($this->ipcSocket)) {
-                // Our IPC socket has died somehow ... all we can do now is exit.
-                exit;
-            }
+        if (!@fwrite($this->ipcSocket, '.')) {
+            // Our IPC socket has died somehow ... all we can do now is exit.
+            exit(1);
         }
     }
 }

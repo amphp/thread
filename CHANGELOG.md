@@ -1,3 +1,7 @@
+### Master
+
+- Cleanup edge-case IPC failure in worker threads
+
 v0.6.0
 ------
 
