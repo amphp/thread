@@ -2,7 +2,7 @@
 
 namespace Amp;
 
-use Alert\Reactor, Alert\Promise, Alert\Future, Alert\Failure;
+use Alert\Reactor, After\Promise, After\Future, After\Failure;
 
 class Dispatcher {
     const OPT_THREAD_FLAGS = 1;
@@ -63,7 +63,7 @@ class Dispatcher {
      * @param string $procedure The name of the function to invoke
      * @param mixed $varArgs A variable-length argument list to pass the procedure
      * @throws \InvalidArgumentException if the final parameter is not a valid callback
-     * @return \Alert\Future
+     * @return \After\Future
      */
     public function call($procedure, $varArgs = NULL /*..., $argN*/) {
         if (!is_string($procedure)) {
@@ -92,7 +92,7 @@ class Dispatcher {
      * This method will auto-start the thread pool if workers have not been spawned.
      *
      * @param \Stackable $task A custom pthreads stackable
-     * @return \Alert\Future
+     * @return \After\Future
      */
     public function execute(\Stackable $task) {
         if (!$this->isStarted) {
@@ -648,7 +648,7 @@ class Dispatcher {
      * Execute a Stackable task in the thread pool
      *
      * @param \Stackable $task
-     * @return \Alert\Future
+     * @return \After\Future
      */
     public function __invoke(\Stackable $task) {
         return $this->execute($task);
@@ -681,7 +681,7 @@ class Dispatcher {
      *
      * @param string $method
      * @param array $args
-     * @return \Alert\Future
+     * @return \After\Future
      */
     public function __call($method, $args) {
         array_unshift($args, $method);

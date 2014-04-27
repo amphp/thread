@@ -13,7 +13,8 @@
   ],
   "require": {
     "php": ">=5.4.0",
-    "rdlowrey/alert": "~0.7.0"
+    "rdlowrey/alert": "~0.8.0",
+    "rdlowrey/after": "~0.1.0"
   },
   "autoload": {
     "files": ["src/bootstrap.php"]

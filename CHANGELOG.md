@@ -1,6 +1,7 @@
 ### Master
 
 - Cleanup edge-case IPC failure in worker threads
+- Add new "After" submodule for moved concurrency primitives
 
 v0.6.0
 ------

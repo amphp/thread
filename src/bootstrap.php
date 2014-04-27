@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__ . '/../vendor/Alert/src/bootstrap.php';
+require __DIR__ . '/../vendor/After/src/bootstrap.php';
 
 spl_autoload_register(function($class) {
     if (strpos($class, 'Amp\\') === 0) {

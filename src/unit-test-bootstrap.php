@@ -1,8 +1,9 @@
 <?php
 
-use Alert\Promise, Alert\Future;
+use After\Promise, After\Future;
 
 require __DIR__ . '/../vendor/Alert/src/bootstrap.php';
+require __DIR__ . '/../vendor/After/src/bootstrap.php';
 
 /**
  * Differs from primary autoloader by routing classes suffixed with "Test"
@@ -78,7 +79,7 @@ class TestStreamApp {
 
     function test() {
         $future = $this->dispatcher->execute(new TestStreamStackable);
-        $future->onComplete(function($future) {
+        $future->onResolution(function($future) {
             $this->stream($future->getValue());
         });
     }
@@ -86,8 +87,8 @@ class TestStreamApp {
     private function stream(\Amp\FutureStream $stream) {
         while ($stream->valid()) {
             $future = $stream->current();
-            if (!$future->isComplete()) {
-                return $future->onComplete(function() use ($stream) {
+            if (!$future->isResolved()) {
+                return $future->onResolution(function() use ($stream) {
                     $this->stream($stream);
                 });
             } else {

@@ -1,3 +1,6 @@
 [submodule "vendor/Alert"]
 	path = vendor/Alert
 	url = https://github.com/rdlowrey/Alert.git
+[submodule "vendor/After"]
+	path = vendor/After
+	url = https://github.com/rdlowrey/After.git

@@ -2,7 +2,7 @@
 
 namespace Amp;
 
-use Alert\NativeReactor, Alert\Promise, Alert\Future;
+use Alert\NativeReactor, After\Promise, After\Future;
 
 class DispatcherTest extends \PHPUnit_Framework_TestCase {
 
@@ -29,7 +29,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
         $dispatcher->start();
 
         $future = $dispatcher->call('strlen', 'zanzibar!');
-        $future->onComplete(function($future) use ($reactor) {
+        $future->onResolution(function($future) use ($reactor) {
             $this->assertEquals(9, $future->getValue());
             $reactor->stop();
         });
@@ -42,7 +42,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
         $reactor->run(function() use ($reactor) {
             $dispatcher = new Dispatcher($reactor);
             $future = $dispatcher->call('multiply', 6, 7);
-            $future->onComplete(function($future) use ($reactor) {
+            $future->onResolution(function($future) use ($reactor) {
                 $this->assertEquals($future->getValue(), 42);
                 $reactor->stop();
             });
@@ -57,7 +57,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
         $reactor->run(function() use ($reactor) {
             $dispatcher = new Dispatcher($reactor);
             $future = $dispatcher->call('exception');
-            $future->onComplete(function($future) use ($reactor) {
+            $future->onResolution(function($future) use ($reactor) {
                 $this->assertFalse($future->succeeded());
 
                 // Should throw
@@ -75,7 +75,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
         $reactor->run(function() use ($reactor) {
             $dispatcher = new Dispatcher($reactor);
             $future = $dispatcher->call('fatal');
-            $future->onComplete(function($future) use ($reactor) {
+            $future->onResolution(function($future) use ($reactor) {
                 $this->assertFalse($future->succeeded());
                 $future->getValue(); // <-- should throw
                 $reactor->stop();
@@ -92,12 +92,12 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
         // Make sure the second call gets queued
         $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
         $future1 = $dispatcher->call('usleep', 50000);
-        $future1->onComplete(function() use (&$count) {
+        $future1->onResolution(function() use (&$count) {
             $count++;
         });
 
         $future2 = $dispatcher->call('strlen', 'zanzibar');
-        $future2->onComplete(function($future) use ($reactor, &$count) {
+        $future2->onResolution(function($future) use ($reactor, &$count) {
             $count++;
             $this->assertEquals(8, $future->getValue());
             $this->assertEquals(2, $count);
@@ -126,7 +126,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
             $future = $dispatcher->call('strlen', 'zanzibar');
             $this->assertEquals(3, $dispatcher->count());
 
-            $future->onComplete(function($future) use ($reactor, $dispatcher) {
+            $future->onResolution(function($future) use ($reactor, $dispatcher) {
                 $this->assertEquals(8, $future->getValue());
                 $count = $dispatcher->count();
                 if ($count !== 0) {
@@ -148,7 +148,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
             $dispatcher->addStartTask(new \TestAutoloaderStackable);
             $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
             $future = $dispatcher->call('AutoloadableClass::test');
-            $future->onComplete(function($future) use ($reactor, $dispatcher) {
+            $future->onResolution(function($future) use ($reactor, $dispatcher) {
                 $this->assertEquals(42, $future->getValue());
                 $reactor->stop();
             });
@@ -165,7 +165,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
         $reactor = new NativeReactor;
         $reactor->run(function() use ($reactor) {
             $test = new \NestedFutureTest($reactor);
-            $test->test()->onComplete(function($future) use ($reactor) {
+            $test->test()->onResolution(function($future) use ($reactor) {
                 $this->assertEquals(8, $future->getValue());
                 $reactor->stop();
             });

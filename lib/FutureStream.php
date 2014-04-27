@@ -2,7 +2,7 @@
 
 namespace Amp;
 
-use Alert\Promise, Alert\Future;
+use After\Promise, After\Future;
 
 class FutureStream implements \Iterator {
     private $futures = [];
@@ -31,7 +31,7 @@ class FutureStream implements \Iterator {
     /**
      * Retrieve the stream's current Future
      *
-     * @return \Alert\Future
+     * @return \After\Future
      */
     public function current() {
         if ($this->futures) {
@@ -60,7 +60,7 @@ class FutureStream implements \Iterator {
     public function next() {
         $current = current($this->futures);
 
-        if ($current && $current instanceof Future && !$current->isComplete()) {
+        if ($current && $current instanceof Future && !$current->isResolved()) {
             throw new \LogicException(sprintf(
                 'Cannot advance FutureStream at index %d; Future value still pending',
                 $this->position
