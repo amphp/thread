@@ -29,11 +29,13 @@ request in a web environment. It really should only be deployed in CLI programs.
 * [PHP 5.4+][php-net] You'll need PHP.
 * [ext/pthreads][pthreads] The pthreads extension ([windows .DLLs here][win-pthreads-dlls])
 * [rdlowrey/alert][alert] Alert IO/events (retrieved automatically with `$ git clone --recursive` or composer install)
+* [rdlowrey/after][after] Simple concurrency primitives (retrieved automatically with `$ git clone --recursive` or composer install)
 
 [php-net]: http://php.net "php.net"
 [pthreads]: http://pecl.php.net/package/pthreads "pthreads"
 [solid]: http://en.wikipedia.org/wiki/SOLID_(object-oriented_design) "S.O.L.I.D."
 [alert]: https://github.com/rdlowrey/Alert "Alert IO/events"
+[after]: https://github.com/rdlowrey/After "After concurrency primitives"
 [win-pthreads-dlls]: http://windows.php.net/downloads/pecl/releases/pthreads/ "pthreads Windows DLLs"
 
 ### Installation
@@ -115,7 +117,7 @@ The simplest way to use Amp is to dispatch calls to global functions:
 ```php
 <?php
 
-use Alert\Future, Alert\ReactorFactory, Amp\Dispatcher;
+use After\Future, Alert\ReactorFactory, Amp\Dispatcher;
 
 // Get an event reactor
 $reactor = (new ReactorFactory)->select();
@@ -150,7 +152,7 @@ A more useful example demonstrates retrieving the contents of a filesystem resou
 
 ```php
 <?php
-use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
+use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
@@ -174,7 +176,7 @@ functions just as easily. Consider:
 
 ```php
 <?php
-use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
+use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
 
 function multiply($x, $y) {
     return $x * $y;
@@ -205,7 +207,7 @@ names. We can also dispatch calls to static class methods:
 
 ```php
 <?php
-use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
+use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
 
 class MyMultiplier {
     public static function multiply($x, $y) {
@@ -244,7 +246,7 @@ namespace. Consider:
 
 ```php
 <?php
-use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
+use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
@@ -264,7 +266,7 @@ our main thread upon completion.
 #### Error Handling
 
 You may have noticed that our examples to this point have not returned results directly. Instead,
-they return an instance of `Alert\Future`. These monadic placeholder objects allow us to distinguish
+they return an instance of `After\Future`. These monadic placeholder objects allow us to distinguish
 between successful results and errors. The most important thing to remember is this:
 
 > Calling `Future::getValue()` will throw in the main thread if execution encountered a
@@ -278,7 +280,7 @@ Consider the following examples ...
 
 ```php
 <?php
-use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
+use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
 
 function myThrowingFunction() {
     throw new \RuntimeException('oh noes!!!');
@@ -309,7 +311,7 @@ restart the thread pool and our main thread seamlessly recovers:
 
 ```php
 <?php
-use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
+use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
 
 function myFatalFunction() {
     $var = $nonexistentObject->nonexistentMethod();
@@ -339,7 +341,7 @@ customize this setting as shown in the following example:
 
 ```php
 <?php
-use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
+use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
 
 $reactor = (new ReactorFactory)->select();
 $reactor->run(function() use ($reactor) {
@@ -467,7 +469,7 @@ for processing.
 
 ```php
 <?php
-use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher, Amp\Thread;
+use Alert\ReactorFactory, After\Future, Amp\Dispatcher, Amp\Thread;
 
 MyTask extends \Stackable {
     public function run() {
@@ -511,7 +513,7 @@ $reactor->run(function() use ($reactor) {
 
 ```php
 <?php
-use Alert\ReactorFactory, Alert\Future, Amp\Dispatcher;
+use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
 
 class MyTask extends \Stackable {
     public function run() {
