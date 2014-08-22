@@ -130,7 +130,7 @@ $reactor->run(function() use ($reactor) {
 
     // Invoke strlen('zanzibar') in a worker thread and
     // notify our callback when the result comes back
-    $future = $dispatcher->call('strlen', 'zanzibar!');
+    $future = $dispatcher->call('strlen', 'zanzibar');
     $future->onComplete(function(Future $f) use ($reactor) {
         printf("Woot! strlen('zanzibar') === %d", $f->getValue());
         $reactor->stop();
