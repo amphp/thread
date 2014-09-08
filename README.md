@@ -3,8 +3,7 @@ AMP: Async Multi-threading in PHP (5.4+)
 
 Amp parallelizes synchronous PHP function calls to worker thread pools in non-blocking applications.
 The library dispatches blocking calls to worker threads where they can execute in parallel and
-returns results asynchronously upon completion. All functionality is exposed in an OS-agnostic
-manner by way of the [pthreads][pthreads] extension.
+returns results asynchronously upon completion.
 
 **Problem Domain**
 
@@ -39,18 +38,11 @@ request in a web environment. It's designed for use in CLI environments.
 
 ### Installation
 
-**Git**
-
 ```bash
-$ git clone --recursive git@github.com:rdlowrey/Amp.git
+$ git clone git@github.com:rdlowrey/Amp.git
+$ cd Amp
+$ composer install
 ```
-
-**Composer**
-
-```bash
-$ php composer.phar require rdlowrey/amp:0.4.*
-```
-
 
 
 
