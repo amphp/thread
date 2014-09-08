@@ -1,24 +1,24 @@
 {
-  "name": "rdlowrey/amp",
-  "homepage": "https://github.com/rdlowrey/Amp",
-  "description": "Asynchronous Multiprocessing for PHP applications.",
-  "keywords": ["async", "concurrency", "parallelization", "non-blocking", "threads", "pthreads"],
-  "license": "MIT",
-  "authors": [
-    {
-      "name": "Daniel Lowrey",
-      "email": "rdlowrey@gmail.com",
-      "role": "Creator / Lead Developer"
-    }
-  ],
-  "require": {
-    "php": ">=5.4.0",
-    "rdlowrey/alert": "~0.10.0",
-    "rdlowrey/after": "~0.2.0"
-  },
-  "autoload": {
-      "psr-4": {
-          "Amp\\": "lib/"
+    "name": "rdlowrey/amp",
+    "homepage": "https://github.com/rdlowrey/Amp",
+    "description": "Asynchronous Multiprocessing for PHP applications.",
+    "keywords": ["async", "concurrency", "parallelization", "non-blocking", "threads", "pthreads"],
+    "license": "MIT",
+    "authors": [
+      {
+          "name": "Daniel Lowrey",
+          "email": "rdlowrey@gmail.com",
+          "role": "Creator / Lead Developer"
       }
-  }
+    ],
+    "require": {
+        "php": ">=5.4.0",
+        "rdlowrey/alert": "~0.10.0",
+        "rdlowrey/after": "~0.2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Amp\\": "lib/"
+        }
+    }
 }
