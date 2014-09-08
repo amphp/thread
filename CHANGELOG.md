@@ -1,7 +1,16 @@
-### Master
+v0.7.0-dev
+----------
 
+- Use completely refactored (new) After dependency
+- Allow for custom task progress updates via `After\Promise` API
 - Cleanup edge-case IPC failure in worker threads
 - Add new "After" submodule for moved concurrency primitives
+
+> **BC Breaks:**
+
+- This update uses the new 0.2.x version of the After dependency. As such, the public API dealing
+  with promised results has completely changed. Please see https://github.com/rdlowrey/After for
+  details.
 
 v0.6.0
 ------
