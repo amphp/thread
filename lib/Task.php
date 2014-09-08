@@ -43,7 +43,7 @@ class Task extends \Stackable {
             $result = $e->__toString();
         }
 
-        $this->worker->registerResult($resultCode, $result);
+        $this->worker->resolve($resultCode, $result);
     }
 
 }

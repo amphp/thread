@@ -33,7 +33,7 @@ class TaskNotifier extends \Stackable {
             $data = "Stackable tasks MUST register results with the worker thread";
         }
 
-        $this->worker->registerResult($resultCode, $data);
+        $this->worker->resolve($resultCode, $data);
     }
 
 }
