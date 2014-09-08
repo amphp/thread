@@ -2,8 +2,7 @@
 
 use After\Promise, After\Future;
 
-require __DIR__ . '/../vendor/Alert/src/bootstrap.php';
-require __DIR__ . '/../vendor/After/src/bootstrap.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 /**
  * Differs from primary autoloader by routing classes suffixed with "Test"
@@ -61,63 +60,22 @@ class TestAutoloaderStackable extends \Stackable {
 
 class TestStreamStackable extends \Stackable {
     function run() {
-        $this->worker->registerResult(\Amp\Thread::STREAM_START, 1);
-        $this->worker->registerResult(\Amp\Thread::STREAM_DATA, 2);
-        $this->worker->registerResult(\Amp\Thread::STREAM_DATA, 3);
-        $this->worker->registerResult(\Amp\Thread::STREAM_END, 4);
+        $this->worker->updateProgress(1);
+        $this->worker->updateProgress(2);
+        $this->worker->updateProgress(3);
+        $this->worker->updateProgress(4);
+        $this->worker->registerResult(\Amp\Thread::SUCCESS, null);
     }
 }
 
-class TestStreamApp {
-    private $reactor;
-    private $dispatcher;
-
-    function __construct(Alert\Reactor $reactor = NULL, Amp\Dispatcher $dispatcher = NULL) {
-        $this->reactor = $reactor ?: (new \Alert\ReactorFactory)->select();
-        $this->dispatcher = $dispatcher ?: new \Amp\Dispatcher($this->reactor);
-    }
-
-    function test() {
-        $future = $this->dispatcher->execute(new TestStreamStackable);
-        $future->onResolution(function($future) {
-            $this->stream($future->getValue());
-        });
-    }
-
-    private function stream(\Amp\FutureStream $stream) {
-        while ($stream->valid()) {
-            $future = $stream->current();
-            if (!$future->isResolved()) {
-                return $future->onResolution(function() use ($stream) {
-                    $this->stream($stream);
-                });
-            } else {
-                echo $future->getValue(), "\n";
-            }
-            $stream->next();
-        }
-
-        $this->reactor->stop();
-    }
-}
-
-class NestedFutureTest {
-
-    private $reactor;
-    private $dispatcher;
-
-    function __construct(\Alert\Reactor $reactor, \Amp\Dispatcher $dispatcher = NULL) {
-        $this->reactor = $reactor;
-        $this->dispatcher = $dispatcher ?: new \Amp\Dispatcher($reactor);
-    }
-
-    function test() {
-        $promise = new Promise;
-        $future = $promise->getFuture();
-
-        $nestedFuture = $this->dispatcher->call('strlen', 'zanzibar');
-        $promise->succeed($nestedFuture);
-
-        return $future;
-    }
+function testUpdate($reactor) {
+    $dispatcher = new Amp\Dispatcher($reactor);
+    $promise = $dispatcher->execute(new TestStreamStackable);
+    $promise->watch(function($update) {
+        echo "$update\n";
+    });
+    $promise->when(function($error, $result) use ($reactor) {
+        assert($result === null);
+        $reactor->stop();
+    });
 }
