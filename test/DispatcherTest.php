@@ -24,63 +24,31 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
     }
 
     public function testNativeFunctionDispatch() {
-        $reactor = new NativeReactor;
-        $dispatcher = new Dispatcher($reactor);
-        $dispatcher->start();
-
-        $future = $dispatcher->call('strlen', 'zanzibar!');
-        $future->onResolution(function($future) use ($reactor) {
-            $this->assertEquals(9, $future->getValue());
-            $reactor->stop();
-        });
-
-        $reactor->run();
+        $dispatcher = new Dispatcher(new NativeReactor);
+        $value = $dispatcher->call('strlen', 'zanzibar!')->wait();
+        $this->assertEquals(9, $value);
     }
 
     public function testUserlandFunctionDispatch() {
-        $reactor = new NativeReactor;
-        $reactor->run(function() use ($reactor) {
-            $dispatcher = new Dispatcher($reactor);
-            $future = $dispatcher->call('multiply', 6, 7);
-            $future->onResolution(function($future) use ($reactor) {
-                $this->assertEquals($future->getValue(), 42);
-                $reactor->stop();
-            });
-        });
+        $dispatcher = new Dispatcher(new NativeReactor);
+        $value = $dispatcher->call('multiply', 6, 7)->wait();
+        $this->assertEquals($value, 42);
     }
 
     /**
      * @expectedException \Amp\DispatchException
      */
     public function testErrorResultReturnedIfInvocationThrows() {
-        $reactor = new NativeReactor;
-        $reactor->run(function() use ($reactor) {
-            $dispatcher = new Dispatcher($reactor);
-            $future = $dispatcher->call('exception');
-            $future->onResolution(function($future) use ($reactor) {
-                $this->assertFalse($future->succeeded());
-
-                // Should throw
-                $future->getValue();
-                $reactor->stop();
-            });
-        });
+        $dispatcher = new Dispatcher(new NativeReactor);
+        $dispatcher->call('exception')->wait(); // should throw
     }
 
     /**
      * @expectedException \Amp\DispatchException
      */
     public function testErrorResultReturnedIfInvocationFatals() {
-        $reactor = new NativeReactor;
-        $reactor->run(function() use ($reactor) {
-            $dispatcher = new Dispatcher($reactor);
-            $future = $dispatcher->call('fatal');
-            $future->onResolution(function($future) use ($reactor) {
-                $this->assertFalse($future->succeeded());
-                $future->getValue(); // <-- should throw
-                $reactor->stop();
-            });
-        });
+        $dispatcher = new Dispatcher(new NativeReactor);
+        $dispatcher->call('fatal')->wait(); // should throw
     }
 
     public function testNextTaskDequeuedOnCompletion() {
@@ -91,15 +59,15 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
 
         // Make sure the second call gets queued
         $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
-        $future1 = $dispatcher->call('usleep', 50000);
-        $future1->onResolution(function() use (&$count) {
+        $dispatcher->call('usleep', 50000)->when(function() use (&$count) {
             $count++;
         });
 
-        $future2 = $dispatcher->call('strlen', 'zanzibar');
-        $future2->onResolution(function($future) use ($reactor, &$count) {
+        $dispatcher->call('strlen', 'zanzibar')->when(function($error, $result) use ($reactor, &$count) {
             $count++;
-            $this->assertEquals(8, $future->getValue());
+            fwrite(STDERR, $error);
+            $this->assertTrue(is_null($error));
+            $this->assertEquals(8, $result);
             $this->assertEquals(2, $count);
             $reactor->stop();
         });
@@ -108,9 +76,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
     }
 
     public function testCount() {
-        $reactor = new NativeReactor;
-
-        $reactor->run(function() use ($reactor) {
+        (new NativeReactor)->run(function($reactor) {
             $dispatcher = new Dispatcher($reactor);
 
             // Make sure repeated calls get queued behind the first call
@@ -123,33 +89,31 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
             $dispatcher->call('strlen', 'zanzibar');
             $this->assertEquals(2, $dispatcher->count());
 
-            $future = $dispatcher->call('strlen', 'zanzibar');
+            $promise = $dispatcher->call('strlen', 'zanzibar');
             $this->assertEquals(3, $dispatcher->count());
 
-            $future->onResolution(function($future) use ($reactor, $dispatcher) {
-                $this->assertEquals(8, $future->getValue());
+            $promise->when(function($error, $result) use ($reactor, $dispatcher) {
+                $reactor->stop();
+                $this->assertTrue(is_null($error));
+                $this->assertEquals(8, $result);
                 $count = $dispatcher->count();
                 if ($count !== 0) {
-                    $reactor->stop();
                     $this->fail(
                         sprintf('Zero expected for dispatcher count; %d returned', $count)
                     );
-                } else {
-                    $reactor->stop();
                 }
             });
         });
     }
 
     public function testNewWorkerIncludes() {
-        $reactor = new NativeReactor;
-        $reactor->run(function() use ($reactor) {
+        (new NativeReactor)->run(function($reactor) {
             $dispatcher = new Dispatcher($reactor);
             $dispatcher->addStartTask(new \TestAutoloaderStackable);
             $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
-            $future = $dispatcher->call('AutoloadableClass::test');
-            $future->onResolution(function($future) use ($reactor, $dispatcher) {
-                $this->assertEquals(42, $future->getValue());
+            $promise = $dispatcher->call('AutoloadableClass::test');
+            $promise->when(function($error, $result) use ($reactor) {
+                $this->assertEquals(42, $result);
                 $reactor->stop();
             });
         });
@@ -157,19 +121,6 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
 
     public function testStreamingResult() {
         $this->expectOutputString("1\n2\n3\n4\n");
-        $reactor = new NativeReactor;
-        $reactor->run([new \TestStreamApp($reactor), 'test']);
+        (new NativeReactor)->run('testUpdate');
     }
-
-    public function testNestedFutureResolution() {
-        $reactor = new NativeReactor;
-        $reactor->run(function() use ($reactor) {
-            $test = new \NestedFutureTest($reactor);
-            $test->test()->onResolution(function($future) use ($reactor) {
-                $this->assertEquals(8, $future->getValue());
-                $reactor->stop();
-            });
-        });
-    }
-
 }

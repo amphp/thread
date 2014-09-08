@@ -2,7 +2,10 @@
 
 namespace Amp;
 
-use Alert\Reactor, After\Promise, After\Future, After\Failure;
+use Alert\Reactor;
+use After\Promise;
+use After\Future;
+use After\Failure;
 
 class Dispatcher {
     const OPT_THREAD_FLAGS = 1;
@@ -40,12 +43,12 @@ class Dispatcher {
     private $workerStartTasks;
     private $periodTimeoutInterval = 1000;
     private $idleWorkerTimeout = 1;
-    private $isPeriodWatcherEnabled = FALSE;
+    private $isPeriodWatcherEnabled = false;
     private $taskReflection;
     private $taskNotifier;
     private $nextId;
     private $now;
-    private $isStarted = FALSE;
+    private $isStarted = false;
 
     public function __construct(Reactor $reactor) {
         $this->reactor = $reactor;
@@ -63,9 +66,9 @@ class Dispatcher {
      * @param string $procedure The name of the function to invoke
      * @param mixed $varArgs A variable-length argument list to pass the procedure
      * @throws \InvalidArgumentException if the final parameter is not a valid callback
-     * @return \After\Future
+     * @return \After\Promise
      */
-    public function call($procedure, $varArgs = NULL /*..., $argN*/) {
+    public function call($procedure, $varArgs = null /*..., $argN*/) {
         if (!is_string($procedure)) {
             throw new \InvalidArgumentException(
                 sprintf('%s requires a string at Argument 1', __METHOD__)
@@ -78,12 +81,12 @@ class Dispatcher {
 
         if ($this->maxTaskQueueSize < 0 || $this->maxTaskQueueSize > $this->outstandingTaskCount) {
             $task = $this->taskReflection->newInstanceArgs(func_get_args());
-            $future = $this->acceptNewTask($task);
+            return $this->acceptNewTask($task);
         } else {
-            $future = new Failure(new TooBusyException);
+            return new Failure(new TooBusyException(
+                sprintf("Cannot execute '%s' task; too busy", $procedure)
+            ));
         }
-
-        return $future;
     }
 
     /**
@@ -92,7 +95,7 @@ class Dispatcher {
      * This method will auto-start the thread pool if workers have not been spawned.
      *
      * @param \Stackable $task A custom pthreads stackable
-     * @return \After\Future
+     * @return \After\Promise
      */
     public function execute(\Stackable $task) {
         if (!$this->isStarted) {
@@ -100,24 +103,24 @@ class Dispatcher {
         }
 
         if ($this->maxTaskQueueSize < 0 || $this->maxTaskQueueSize > $this->outstandingTaskCount) {
-            $future = $this->acceptNewTask($task);
+            return $this->acceptNewTask($task);
         } else {
-            $future = new Failure(new TooBusyException);
+            return new Failure(new TooBusyException(
+                sprintf('Cannot execute task of type %s; too busy', get_class($task))
+            ));
         }
-
-        return $future;
     }
 
     private function acceptNewTask(\Stackable $task) {
-        $promise = new Promise;
+        $future = new Future($this->reactor);
         $promiseId = $this->nextId++;
-        $this->queue[$promiseId] = [$promise, $task];
+        $this->queue[$promiseId] = [$future, $task];
         $this->outstandingTaskCount++;
 
-        if ($this->isPeriodWatcherEnabled === FALSE) {
-            $this->now = microtime(TRUE);
+        if ($this->isPeriodWatcherEnabled === false) {
+            $this->now = microtime(true);
             $this->reactor->enable($this->timeoutWatcher);
-            $this->isPeriodWatcherEnabled = TRUE;
+            $this->isPeriodWatcherEnabled = true;
         }
 
         if ($this->taskTimeout > -1) {
@@ -131,12 +134,12 @@ class Dispatcher {
             $this->spawnWorker();
         }
 
-        return $promise->getFuture();
+        return $future->promise();
     }
 
     private function dequeueNextTask() {
         $promiseId = key($this->queue);
-        list($promise, $task) = $this->queue[$promiseId];
+        list($future, $task) = $this->queue[$promiseId];
 
         unset($this->queue[$promiseId]);
 
@@ -145,7 +148,7 @@ class Dispatcher {
         $this->promiseWorkerMap[$promiseId] = $worker;
 
         $worker->promiseId = $promiseId;
-        $worker->promise = $promise;
+        $worker->future = $future;
         $worker->task = $task;
         $worker->thread->stack($task);
         $worker->thread->stack($this->taskNotifier);
@@ -162,7 +165,7 @@ class Dispatcher {
     public function start() {
         if (!$this->isStarted) {
             $this->generateIpcServer();
-            $this->isStarted = TRUE;
+            $this->isStarted = true;
             for ($i=0;$i<$this->poolSizeMin;$i++) {
                 $this->spawnWorker();
             }
@@ -198,9 +201,9 @@ class Dispatcher {
             );
         }
 
-        stream_set_blocking($server, FALSE);
+        stream_set_blocking($server, false);
 
-        $serverName = stream_socket_get_name($server, FALSE);
+        $serverName = stream_socket_get_name($server, false);
         $protocol = ($serverName[0] === '/') ? 'unix' : 'tcp';
 
         $this->ipcUri = sprintf('%s://%s', $protocol, $serverName);
@@ -241,7 +244,7 @@ class Dispatcher {
         }
 
         $ipcClientId = (int) $ipcClient;
-        stream_set_blocking($ipcClient, FALSE);
+        stream_set_blocking($ipcClient, false);
         $readWatcher = $this->reactor->onReadable($ipcClient, function($watcherId, $ipcClient)  {
             $this->onPendingReadableIpcClient($ipcClient);
         });
@@ -306,16 +309,16 @@ class Dispatcher {
 
     private function registerTaskTimeoutWatcher() {
         if ($this->taskTimeout > -1) {
-            $this->now = microtime(TRUE);
+            $this->now = microtime(true);
             $this->timeoutWatcher = $this->reactor->repeat(function() {
                 $this->executePeriodTimeouts();
             }, $this->periodTimeoutInterval);
-            $this->isPeriodWatcherEnabled = TRUE;
+            $this->isPeriodWatcherEnabled = true;
         }
     }
 
     private function executePeriodTimeouts() {
-        $this->now = $now = microtime(TRUE);
+        $this->now = $now = microtime(true);
 
         if ($this->promiseTimeoutMap) {
             $this->timeoutOverdueTasks($now);
@@ -337,7 +340,7 @@ class Dispatcher {
         }
 
         if ($this->outstandingTaskCount === 0 && $this->poolSize === $this->poolSizeMin) {
-            $this->isPeriodWatcherEnabled = FALSE;
+            $this->isPeriodWatcherEnabled = false;
             $this->reactor->disable($this->timeoutWatcher);
         }
     }
@@ -363,14 +366,14 @@ class Dispatcher {
         if (isset($this->promiseWorkerMap[$promiseId])) {
             $this->outstandingTaskCount--;
             $worker = $this->promiseWorkerMap[$promiseId];
-            $worker->promise->resolveSafely($error);
+            $worker->future->fail($error);
             $this->unloadWorker($worker);
             $worker->thread->kill();
             $this->spawnWorker();
         } else {
             $this->outstandingTaskCount--;
-            list($promise) = $this->queue[$promiseId];
-            $promise->resolveSafely($error);
+            list($future) = $this->queue[$promiseId];
+            $future->fail($error);
             unset($this->queue[$promiseId]);
         }
     }
@@ -394,65 +397,42 @@ class Dispatcher {
     private function processWorkerTaskResult(Worker $worker) {
         $resultCode = $worker->resultCodes->shift();
         $data = $worker->results->shift();
-
-        if ($worker->stream) {
-            $this->processStreamTaskNotification($worker, $resultCode, $data);
-        } else {
-            $this->processNonStreamTaskNotification($worker, $resultCode, $data);
-        }
-    }
-
-    private function processNonStreamTaskNotification(Worker $worker, $resultCode, $data) {
-        $result = $error = $mustKill = $isStream = NULL;
+        $error = $mustKill = null;
 
         switch ($resultCode) {
             case Thread::SUCCESS:
-                $result = $data;
+                // nothing to do
                 break;
             case Thread::FAILURE:
                 $error = new TaskException($data);
                 break;
             case Thread::FATAL:
-                $mustKill = TRUE;
+                $mustKill = true;
                 $error = new TaskException($data);
                 break;
-            case Thread::STREAM_START:
-                $isStream = TRUE;
-                $result = $this->generateStreamResult($worker, $data);
-                break;
+            case Thread::UPDATE:
+                $worker->future->update($data);
+                return; // return here because the task is not yet complete
             default:
-                $mustKill = TRUE;
+                $mustKill = true;
                 $error = new TaskException(
                     sprintf(
                         'Unexpected worker notification code: %s',
-                        ord($resultCode) ? $resultCode : 'NULL'
+                        ord($resultCode) ? $resultCode : 'null'
                     )
                 );
         }
 
-        if ($isStream) {
-            $worker->promise->resolve($error, $result);
+        $this->outstandingTaskCount--;
+        $worker->tasksExecuted++;
+
+        if ($error) {
+            $worker->future->fail($error);
         } else {
-            $this->outstandingTaskCount--;
-            $worker->tasksExecuted++;
-            $worker->promise->resolve($error, $result);
-            $this->afterTaskCompletion($worker, $mustKill);
+            $worker->future->succeed($data);
         }
-    }
 
-    private function generateStreamResult(Worker $worker, $data) {
-        $stream = new FutureStream;
-        $streamInjector = function($isFinalStreamElement, \Exception $error = NULL, $result = NULL) {
-            $this->fulfillLastPromise($isFinalStreamElement, $error, $result);
-        };
-        $streamInjector = $streamInjector->bindTo($stream, $stream);
-        $worker->stream = $stream;
-        $worker->streamInjector = $streamInjector;
-
-        $streamInjector($isFinal = FALSE, $error = NULL, $data);
-        $worker->thread->stack($this->taskNotifier);
-
-        return $stream;
+        $this->afterTaskCompletion($worker, $mustKill);
     }
 
     private function afterTaskCompletion(Worker $worker, $mustKill) {
@@ -464,7 +444,7 @@ class Dispatcher {
                 $this->promiseWorkerMap[$promiseId],
                 $this->promiseTimeoutMap[$promiseId]
             );
-            $worker->promiseId = $worker->promise = $worker->task = NULL;
+            $worker->promiseId = $worker->promise = $worker->task = null;
             $this->availableWorkers[$worker->id] = $worker;
         }
 
@@ -473,52 +453,14 @@ class Dispatcher {
         }
     }
 
-    private function processStreamTaskNotification(Worker $worker, $resultCode, $data) {
-        switch ($resultCode) {
-            case Thread::STREAM_DATA:
-                $mustKill = FALSE;
-                $isFinalStreamElement = FALSE;
-                break;
-            case Thread::STREAM_END:
-                $mustKill = FALSE;
-                $isFinalStreamElement = TRUE;
-                break;
-            case Thread::FATAL:
-                $mustKill = TRUE;
-                $isFinalStreamElement = TRUE;
-                $error = new TaskException($data);
-                break;
-            default:
-                throw new \DomainException(
-                    sprintf(
-                        'Unexpected worker result code (%s); STREAM_DATA or STREAM_END required',
-                        ord($resultCode) ? $resultCode : 'NULL'
-                    )
-                );
-        }
-
-        $streamInjector = $worker->streamInjector;
-        $streamInjector($isFinalStreamElement, $error = NULL, $data);
-
-        if ($isFinalStreamElement) {
-            $this->outstandingTaskCount--;
-            $worker->tasksExecuted++;
-            $this->afterTaskCompletion($worker, $mustKill);
-        } else {
-            $worker->thread->stack($this->taskNotifier);
-        }
-    }
-
     private function shouldRespawn(Worker $worker) {
         if ($this->executionLimit <= 0) {
-            $shouldRespawn = FALSE;
+            return false;
         } elseif ($worker->tasksExecuted >= $this->executionLimit) {
-            $shouldRespawn = TRUE;
+            return true;
         } else {
-            $shouldRespawn = FALSE;
+            return false;
         }
-
-        return $shouldRespawn;
     }
 
     private function respawnWorker(Worker $worker) {
@@ -626,7 +568,7 @@ class Dispatcher {
     }
 
     private function setUnixIpcSocketDir($dir) {
-        if (!is_dir($dir) || @mkdir($dir, $permissions = 0744, $recursive = TRUE)) {
+        if (!is_dir($dir) || @mkdir($dir, $permissions = 0744, $recursive = true)) {
             throw new \RuntimeException(
                 sprintf('Socket directory does not exist and could not be created: %s', $dir)
             );
@@ -648,7 +590,7 @@ class Dispatcher {
      * Execute a Stackable task in the thread pool
      *
      * @param \Stackable $task
-     * @return \After\Future
+     * @return \After\Promise
      */
     public function __invoke(\Stackable $task) {
         return $this->execute($task);
@@ -681,7 +623,7 @@ class Dispatcher {
      *
      * @param string $method
      * @param array $args
-     * @return \After\Future
+     * @return \After\Promise
      */
     public function __call($method, $args) {
         array_unshift($args, $method);

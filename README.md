@@ -8,15 +8,14 @@ manner by way of the [pthreads][pthreads] extension.
 
 **Problem Domain**
 
-PHP has a vast catalog of synchronous libraries and extensions. However, it's generally hard to
-find non-blocking libs for use inside event loops. Beyond this limitation, there are common tasks
-(like filesystem IO) which don't play nice with the non-blocking paradigm. Unfortunately, threading
-is an altogether different approach to concurrency from that used in non-blocking applications.
-Amp seemlessly exposes threaded concurrency inside non-blocking PHP applications.
+PHP has a vast catalog of synchronous libraries and extensions. However, it's generally difficult to
+find libs for use inside non-blocking event loops. Beyond this limitation there are common tasks
+(like filesystem IO) which don't play nice with the non-blocking paradigm. Amp exposes threaded
+concurrency in a non-blocking way to execute tasks in worker threads.
 
 > **NOTE:** Amp isn't really intended for use in a PHP web SAPI environment. It doesn't make sense
 to fire up a new thread pool that internally uses sockets for inter-thread communication on each
-request in a web environment. It really should only be deployed in CLI programs.
+request in a web environment. It's designed for use in CLI environments.
 
 ### Project Goals
 
@@ -28,8 +27,8 @@ request in a web environment. It really should only be deployed in CLI programs.
 
 * [PHP 5.4+][php-net] You'll need PHP.
 * [ext/pthreads][pthreads] The pthreads extension ([windows .DLLs here][win-pthreads-dlls])
-* [rdlowrey/alert][alert] Alert IO/events (retrieved automatically with `$ git clone --recursive` or composer install)
-* [rdlowrey/after][after] Simple concurrency primitives (retrieved automatically with `$ git clone --recursive` or composer install)
+* [rdlowrey/alert][alert] Alert IO/events
+* [rdlowrey/after][after] Simple concurrency primitives for use with Alert reactors
 
 [php-net]: http://php.net "php.net"
 [pthreads]: http://pecl.php.net/package/pthreads "pthreads"
@@ -86,7 +85,7 @@ $ php composer.phar require rdlowrey/amp:0.4.*
 
 #### Event Loop Basics
 
-Executing code inside an event loop allows us to use non-blocking libraries to perform many IO
+Executing code inside an event loop allows us to use non-blocking libraries to perform multiple IO
 operations at the same time. Instead of waiting for each individual operation to complete the event
 loop assumes program flow and informs us when our tasks finish or actionable events occur. This
 paradigm allows programs to execute other instructions when they would otherwise waste cycle waiting
@@ -105,6 +104,8 @@ Because Amp executes inside an event loop, you'll see all of the following examp
 event reactor instance to kick things off. Once the event reactor is started it assumes program
 control and *will not* return control until your application calls `Reactor::stop()`.
 
+> **Learn more about the [Alert event reactor](https://github.com/rdlowrey/Alert).**
+
 
 
 ### Basic Usage
@@ -116,23 +117,23 @@ The simplest way to use Amp is to dispatch calls to global functions:
 
 ```php
 <?php
+// Everything happens inside an event reactor loop
+(new Alert\NativeReactor)->run(function($reactor) {
 
-use After\Future, Alert\ReactorFactory, Amp\Dispatcher;
-
-// Get an event reactor
-$reactor = (new ReactorFactory)->select();
-
-// Start the event loop and tell it to execute this closure immediately
-$reactor->run(function() use ($reactor) {
-
-    // Create our Dispatcher using the event reactor
-    $dispatcher = new Dispatcher($reactor);
+    // Create our pthreads task dispatcher
+    $dispatcher = new Amp\Dispatcher($reactor);
 
     // Invoke strlen('zanzibar') in a worker thread and
     // notify our callback when the result comes back
-    $future = $dispatcher->call('strlen', 'zanzibar!');
-    $future->onComplete(function(Future $f) use ($reactor) {
-        printf("Woot! strlen('zanzibar') === %d", $f->getValue());
+
+    $promise = $dispatcher->call('strlen', 'zanzibar!');
+    $promise->when(function($error, $result) use ($reactor) {
+
+        // Output the results of the function call executed in
+        // a worker thread.
+        printf("Woot! strlen('zanzibar') === %d", $result);
+
+        // Stop the event loop so we don't sit around forever
         $reactor->stop();
     });
 
@@ -152,42 +153,44 @@ A more useful example demonstrates retrieving the contents of a filesystem resou
 
 ```php
 <?php
-use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
-
-$reactor = (new ReactorFactory)->select();
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new Dispatcher($reactor);
-    $future = $dispatcher->call('file_get_contents', '/path/to/file');
-    $future->onComplete(function(Future $f) use ($reactor) {
-        var_dump($f->getValue());
+(new Alert\NativeReactor)->run(function($reactor) {
+    $dispatcher = new Amp\Dispatcher($reactor);
+    $promise = $dispatcher->call('file_get_contents', '/path/to/file');
+    $promise->when(function($error, $result) use ($reactor) {
+        if ($error) {
+            printf("Something went wrong: %s", $error->getMessage());
+        } else {
+            var_dump($result);
+        }
         $reactor->stop();
     });
 });
 ```
 
-The above code retrieves the contents of the file at `/path/to/file` and var_dumps the result in
-our main thread upon completion.
+The above code retrieves the contents of the file at `/path/to/file` in a worker thread and dumps
+the result in our main thread upon completion.
 
 
 #### Userland Functions
 
-We aren't limited to native functions. The `Amp\Dispatcher` can dispatch calls to userland
-functions just as easily. Consider:
+We aren't limited to native functions. The `Amp\Dispatcher` can also dispatch calls to userland
+functions ...
 
 ```php
 <?php
-use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
-
-function multiply($x, $y) {
+function myMultiply($x, $y) {
     return $x * $y;
 }
 
-$reactor = (new ReactorFactory)->select();
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new Dispatcher($reactor);
-    $future = $dispatcher->call('multiply', 6, 7);
-    $future->onComplete(function(Future $f) use ($reactor) {
-        var_dump($f->getValue());
+(new Alert\NativeReactor)->run(function($reactor) {
+    $dispatcher = new Amp\Dispatcher($reactor);
+    $promise = $dispatcher->call('myMultiply', 6, 7);
+    $promise->when(function($error, $result) use ($reactor) {
+        if ($error) {
+            printf("Something went wrong: %s", $error->getMessage());
+        } else {
+            var_dump($result);
+        }
         $reactor->stop();
     });
 });
@@ -202,25 +205,26 @@ int(42)
 
 #### Static Methods
 
-The `Dispatcher::call` method can handle any callable string, so we aren't limited to function
+The `Dispatcher::call()` method can accept any callable string, so we aren't limited to function
 names. We can also dispatch calls to static class methods:
 
 ```php
 <?php
-use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
-
 class MyMultiplier {
     public static function multiply($x, $y) {
         return $x * $y;
     }
 }
 
-$reactor = (new ReactorFactory)->select();
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new Dispatcher($reactor);
-    $future = $dispatcher->call('MyMultiplier::multiply', 6, 7);
-    $future->onComplete(function(Future $f) use ($reactor) {
-        var_dump($f->getValue());
+(new Alert\NativeReactor)->run(function($reactor) {
+    $dispatcher = new Amp\Dispatcher($reactor);
+    $promise = $dispatcher->call('MyMultiplier::multiply', 6, 7);
+    $promise->when(function($error, $result) use ($reactor) {
+        if ($error) {
+            printf("Something went wrong: %s", $error->getMessage());
+        } else {
+            var_dump($result);
+        }
         $reactor->stop();
     });
 });
@@ -241,19 +245,20 @@ int(42)
 
 #### Magic Calls
 
-Dispatchers take advantage of the magic `__call()` method to simply calls to functions in the global
+Dispatchers take advantage of the magic `__call()` method to simplify calls to functions in the global
 namespace. Consider:
 
 ```php
 <?php
-use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
-
-$reactor = (new ReactorFactory)->select();
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new Dispatcher($reactor);
-    $future = $dispatcher->fopen('/path/to/file', 'r');
-    $future->onComplete(function(Future $f) use ($reactor) {
-        $fileHandle = $f->getValue();
+(new Alert\NativeReactor)->run(function($reactor) {
+    $dispatcher = new Amp\Dispatcher($reactor);
+    $promise = $dispatcher->fopen('/path/to/file', 'r');
+    $promise->when(function($error, $result) use ($reactor) {
+        if ($error) {
+            printf("Something went wrong: %s", $error->getMessage());
+        } else {
+            var_dump($result);
+        }
         $reactor->stop();
     });
 });
@@ -266,38 +271,28 @@ our main thread upon completion.
 #### Error Handling
 
 You may have noticed that our examples to this point have not returned results directly. Instead,
-they return an instance of `After\Future`. These monadic placeholder objects allow us to distinguish
+they return an instance of `After\Promise`. These monadic placeholder objects allow us to distinguish
 between successful results and errors. The most important thing to remember is this:
 
-> Calling `Future::getValue()` will throw in the main thread if execution encountered a
-> fatal error inside the worker thread.
+> All `After\Promise` instances will notify `when()` callbacks using the "error-first" form when
+> tasks resolve.
 
-This behavior makes it impossible to ignore execution failures. Of course, we can easily determine
-if a call failed using the `Future::succeeded()` convenience method.
-Consider the following examples ...
+This behavior makes it difficult to accidentlly ignore execution failures. Consider ...
 
 **Uncaught Exception**
 
 ```php
 <?php
-use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
 
 function myThrowingFunction() {
     throw new \RuntimeException('oh noes!!!');
 }
 
-$reactor = (new ReactorFactory)->select();
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new Dispatcher($reactor);
-    $future = $dispatcher->myThrowingFunction();
-    $future->onComplete(function(Future $f) use ($reactor) {
-        var_dump($f->succeeded()); // bool(false)
-        var_dump($f->getError() instanceof Exception); // bool(true)
-        try {
-            $var = $f->getValue();
-        } catch (Exception $e) {
-            printf("Task result failed:\n\n%s", $e);
-        }
+(new Alert\NativeReactor)->run(function($reactor) {
+    $dispatcher = new Amp\Dispatcher($reactor);
+    $promise = $dispatcher->myThrowingFunction();
+    $promise->when(function($error, $result) use ($reactor) {
+        var_dump($error);
         $reactor->stop();
     });
 });
@@ -311,19 +306,16 @@ restart the thread pool and our main thread seamlessly recovers:
 
 ```php
 <?php
-use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
 
 function myFatalFunction() {
-    $var = $nonexistentObject->nonexistentMethod();
+    $nonexistentObject->nonexistentMethod(); // fatal
 }
 
-$reactor = (new ReactorFactory)->select();
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new Dispatcher($reactor);
-    $future = $dispatcher->myFatalFunction();
-    $future->onComplete(function(Future $f) use ($reactor) {
-        var_dump($f->succeeded()); // bool(false)
-        echo $f->getError(); // view the error traceback
+(new Alert\NativeReactor)->run(function($reactor) {
+    $dispatcher = new Amp\Dispatcher($reactor);
+    $promise = $dispatcher->myFatalFunction();
+    $promise->when(function($error, $result) use ($reactor) {
+        echo $error; // view the error traceback
         $reactor->stop();
     });
 });
@@ -332,38 +324,32 @@ $reactor->run(function() use ($reactor) {
 #### Task Timeouts
 
 > **NOTE:** Relying on timeouts is almost always a poor design decision. You're much better served
-> to solve the underlying problem that causes slow execution in your dispatched calls/tasks. This
-> timeout functionality should primarily be used in server environments where long-running tasks
-> could become a DoS attack vector.
+> to solve the underlying problem that causes slow execution in your dispatched calls/tasks.
 
 Amp automatically times out tasks exceeding the (configurable) maximum allowed run-time. We can
 customize this setting as shown in the following example:
 
 ```php
 <?php
-use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
-
-$reactor = (new ReactorFactory)->select();
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new Dispatcher($reactor);
+(new Alert\NativeReactor)->run(function($reactor) {
+    $dispatcher = new Amp\Dispatcher($reactor);
 
     // Only use one worker so our thread pool acts like a FIFO job queue
-    $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
+    $dispatcher->setOption(Amp\Dispatcher::OPT_POOL_SIZE_MAX, 1);
 
     // Limit per-call execution time to 2 seconds
-    $dispatcher->setOption(Dispatcher::OPT_TASK_TIMEOUT, 2);
+    $dispatcher->setOption(Amp\Dispatcher::OPT_TASK_TIMEOUT, 2);
 
-    // This function will timeout after two seconds
-    $future = $dispatcher->sleep(9999);
-    $future->onComplete(function(Future $f) {
-        var_dump($f->succeeded()); // bool(false)
-        var_dump($f->getError() instanceof Amp\TimeoutException); // bool(true)
+    // This task will timeout after two seconds
+    $promise = $dispatcher->sleep(9999);
+    $promise->when(function($error, $result) {
+        var_dump($error instanceof Amp\TimeoutException); // bool(true)
     });
 
-    // Queue another function behind the sleep() call
-    $future = $dispatcher->multiply(6, 7);
-    $future->onComplete(function(Future $f) use ($reactor) {
-        var_dump($f->getValue()); // int(42)
+    // Queue up another task behind the sleep() call
+    $promise = $dispatcher->multiply(6, 7);
+    $promise->when(function($error, $result) use ($reactor) {
+        var_dump($result); // int(42)
         $reactor->stop();
     });
 });
@@ -377,17 +363,16 @@ task dispatches. An example:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\Dispatcher;
 
-$reactor = (new ReactorFactory)->select();
-$dispatcher = new Dispatcher($reactor);
-$dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 16);
+$reactor = new Alert\NativeReactor;
+$dispatcher = new Amp\Dispatcher($reactor);
+$dispatcher->setOption(Amp\Dispatcher::OPT_POOL_SIZE_MAX, 16);
 ```
 
 By default the `Amp\Dispatcher` will only spawn a single worker thread. Each time a call is
 dispatched a new thread will be spawned if all existing workers in the pool are busy (subject to the
 configured max size). The default `OPT_POOL_SIZE_MAX` setting is 8. If no workers are available and
-the pool size is maxed out calls are queued and dispatched as workers become available.
+the pool size is maxed calls are queued and dispatched as workers become available.
 
 > **NOTE::** Idle worker threads are periodically unloaded to avoid holding open threads
 > unnecessarily.
@@ -397,11 +382,10 @@ the minimum number of threads kept open is 1. This value may be changed as follo
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\Dispatcher;
 
-$reactor = (new ReactorFactory)->select();
-$dispatcher = new Dispatcher($reactor);
-$dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MIN, 4);
+$reactor = new Alert\NativeReactor;
+$dispatcher = new Amp\Dispatcher($reactor);
+$dispatcher->setOption(Amp\Dispatcher::OPT_POOL_SIZE_MIN, 4);
 ```
 
 
@@ -415,22 +399,20 @@ to modify this setting simply set the relevant option:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\Dispatcher;
 
-$reactor = (new ReactorFactory)->select();
-$dispatcher = new Dispatcher($reactor);
-$dispatcher->setOption(Dispatcher::OPT_EXEC_LIMIT, 1024); // 1024 is the default
+$reactor = new Alert\NativeReactor;
+$dispatcher = new Amp\Dispatcher($reactor);
+$dispatcher->setOption(Amp\Dispatcher::OPT_EXEC_LIMIT, 1024); // 1024 is the default
 ```
 
 Users who wish to remove the execution limit you may set the value to `-1` as shown here:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\Dispatcher;
 
-$reactor = (new ReactorFactory)->select();
-$dispatcher = new Dispatcher($reactor);
-$dispatcher->setOption(Dispatcher::OPT_EXEC_LIMIT, -1);
+$reactor = new Alert\NativeReactor;
+$dispatcher = new Amp\Dispatcher($reactor);
+$dispatcher->setOption(Amp\Dispatcher::OPT_EXEC_LIMIT, -1);
 ```
 
 
@@ -441,11 +423,10 @@ flags as shown here:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\Dispatcher;
 
-$reactor = (new ReactorFactory)->select();
-$dispatcher = new Dispatcher($reactor);
-$dispatcher->setOption(Dispatcher::OPT_THREAD_FLAGS, PTHREADS_INHERIT_NONE);
+$reactor = new Alert\NativeReactor;
+$dispatcher = new Amp\Dispatcher($reactor);
+$dispatcher->setOption(Amp\Dispatcher::OPT_THREAD_FLAGS, PTHREADS_INHERIT_NONE);
 ```
 
 The full list of available flags can be found in the relevant [pthreads documentation page][pthreads-flags].
@@ -477,26 +458,24 @@ MyTask extends \Stackable {
 
         // Stackables must register their results using either of the
         // Amp\Thread::SUCCESS or Amp\Thread::FAILURE codes:
-        $this->worker->registerResult(Thread::SUCCESS, $result);
+        $this->worker->resolve(Thread::SUCCESS, $result);
     }
 }
 
-$reactor = (new ReactorFactory)->select();
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new Dispatcher($reactor);
+(new Alert\NativeReactor)->run(function($reactor) {
+    $dispatcher = new Amp\Dispatcher($reactor);
 
-    // Using call() to dispatch strlen('zanzibar')
-    $future = $dispatcher->call('strlen', 'zanzibar');
-    $future->onComplete(function(Future $f) {
-        assert($f->succeeded());
-        assert($f->getValue() === 8);
+    $promise = $dispatcher->call('strlen', 'zanzibar');
+    $promise->when(function($error, $result) {
+        assert($error === null);
+        assert($result === 8);
     });
 
-    // Using execute() to dispatch strlen('zanzibar')
-    $future = $dispatcher->execute(new MyTask);
-    $future->onComplete(function(Future $f) use ($reactor) {
-        assert($f->succeeded());
-        assert($f->getValue() === 8);
+    // Using execute() to dispatch our custom strlen task
+    $promise = $dispatcher->execute(new MyTask); // task object declared above
+    $promise->when(function($error, $result) use ($reactor) {
+        assert($error === null);
+        assert($result === 8);
         $reactor->stop();
     });
 });
@@ -513,7 +492,6 @@ $reactor->run(function() use ($reactor) {
 
 ```php
 <?php
-use Alert\ReactorFactory, After\Future, Amp\Dispatcher;
 
 class MyTask extends \Stackable {
     public function run() {
@@ -521,11 +499,12 @@ class MyTask extends \Stackable {
     }
 }
 
-$reactor = (new ReactorFactory)->select();
-$reactor->run(function() use ($reactor) {
-    $dispatcher = new Dispatcher($reactor);
-    $future = $dispatcher(new MyTask);
-    $future->onComplete(function(Future $f) use ($reactor) {
+(new Alert\NativeReactor)->run(function($reactor) {
+    $dispatcher = new Amp\Dispatcher($reactor);
+    $promise = $dispatcher(new MyTask);
+    $promise->when(function($error, $result) use ($reactor) {
+        assert($error === null);
+        assert($result === 8);
         $reactor->stop();
     });
 });
@@ -545,7 +524,6 @@ inclusion when workers are spawned:
 
 ```php
 <?php
-use Alert\ReactorFactory, Amp\Dispatcher;
 
 class MyAutoloadTask extends \Stackable {
     public function run() {
@@ -561,8 +539,8 @@ class MyAutoloadTask extends \Stackable {
     }
 }
 
-$reactor = (new ReactorFactory)->select();
-$dispatcher = new Dispatcher($reactor);
+$reactor = new Alert\NativeReactor;
+$dispatcher = new Amp\Dispatcher($reactor);
 $dispatcher->addStartTask(new MyAutoloadTask);
 ```
 
@@ -573,8 +551,8 @@ will have no effect. After adding a start task you may also remove it in the fut
 ```php
 $myStartTask = new MyAutoloadTask;
 
-$reactor = (new ReactorFactory)->select();
-$dispatcher = new Dispatcher($reactor);
+$reactor = new Alert\NativeReactor;
+$dispatcher = new Amp\Dispatcher($reactor);
 $dispatcher->addStartTask($myStartTask);
 
 // ... //

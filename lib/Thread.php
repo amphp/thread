@@ -7,9 +7,7 @@ class Thread extends \Worker {
     const SUCCESS = '$';
     const FAILURE = '!';
     const FATAL = 'x';
-    const STREAM_START = '[';
-    const STREAM_DATA = '=';
-    const STREAM_END = ']';
+    const UPDATE = '%';
 
     private $results;
     private $resultCodes;
@@ -43,14 +41,12 @@ class Thread extends \Worker {
         $this->ipcSocket = $ipcSocket;
     }
 
-    private function registerResult($resultCode, $data) {
+    private function resolve($resultCode, $data) {
         switch ($resultCode) {
-            case self::SUCCESS: break;
-            case self::FAILURE: break;
-            case self::FATAL: break;
-            case self::STREAM_START: break;
-            case self::STREAM_DATA: break;
-            case self::STREAM_END: break;
+            case self::SUCCESS: // fallthrough
+            case self::FAILURE: // fallthrough
+            case self::FATAL:   // fallthrough
+                break;
             default:
                 $data = sprintf('Unknown task result code: %s', $resultCode);
                 $resultCode = self::FATAL;
@@ -58,6 +54,12 @@ class Thread extends \Worker {
 
         $this->results[] = $data;
         $this->resultCodes[] = $resultCode;
+    }
+
+    private function update($data) {
+        $this->results[] = $data;
+        $this->resultCodes[] = self::UPDATE;
+        $this->notifyDispatcher();
     }
 
     private function completedPreviousTask() {
