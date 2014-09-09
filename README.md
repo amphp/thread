@@ -69,13 +69,19 @@ $ composer install
 * [Stackable Tasks](#stackable-tasks)
 * [Magic Tasks](#magic-tasks)
 * [Class Autoloading](#class-autoloading)
-
+* [Naive Wait Parallelization](#naive-wait-parallelization)
+* [Parallelization Combinators](#parallelization-combinators)
 
 
 
 ### Intro
 
 #### Event Loop Basics
+
+> **NOTE:** Because Amp uses `After` concurrency primitives it's possible to execute tasks in
+> parallel with zero knowledge of event loops. You can find out more in the
+> [Naive Wait Parallelization](#naive-wait-parallelization) and
+> [Parallelization Combinators](#parallelization-combinators) sections.
 
 Executing code inside an event loop allows us to use non-blocking libraries to perform multiple IO
 operations at the same time. Instead of waiting for each individual operation to complete the event
@@ -101,7 +107,6 @@ control and *will not* return control until your application calls `Reactor::sto
 
 
 ### Basic Usage
-
 
 #### Basic Calls
 
@@ -550,4 +555,93 @@ $dispatcher->addStartTask($myStartTask);
 // ... //
 
 $dispatcher->removeStartTask($myStartTask);
+```
+
+
+#### Naive Wait Parallelization
+
+Because Amp uses the `After` concurrency primitives library, users don't actually need any understanding
+of the underlying non-blocking event loop to execute Amp tasks in parallel. By calling `wait()` on
+any promise we can block code execution indefinitely until the promised value resolves:
+
+```php
+<?php
+
+try {
+    $dispatcher = new Amp\Dispatcher;
+
+    // Dispatch a threaded task
+    $promise = $dispatcher->call('strlen', 'zanzibar');
+
+    // Synchronously Block until the promise resolves
+    $result = $promise->wait();
+
+    var_dump($result); // int(8)
+
+} catch (Exception $e) {
+    printf("Something went wrong:\n\n%s\n", $e->getMessage());
+}
+```
+
+#### Parallelization Combinators
+
+We can parallelize mutliple threaded operations by using After combinators:
+
+```php
+<?php
+
+try {
+    $dispatcher = new Amp\Dispatcher;
+
+    $a = $dispatcher->call('sleep', 1);
+    $b = $dispatcher->call('sleep', 1);
+    $c = $dispatcher->call('sleep', 1);
+
+    // Combine these three promises into a single promise that
+    // resolves when all of the individual operations complete
+    $comboPromise = After\all([$a, $b, $c]);
+
+    // Our three sleep() operations will complete in one second
+    // because they all run at the same time!
+    $comboPromise->wait();
+
+} catch (Exception $e) {
+    printf("Something went wrong:\n\n%s\n", $e->getMessage());
+}
+```
+
+Combinator return values are also easily accessible. Consider the following example where we list
+the individual results from our parallel calls:
+
+```php
+<?php
+
+function add($x, $y) {
+    return $x + $y;
+}
+
+try {
+    $dispatcher = new Amp\Dispatcher;
+
+    $a = $dispatcher->call('add', 1, 2);
+    $b = $dispatcher->call('add', 10, 32);
+    $c = $dispatcher->call('add', 5, 7);
+
+    // Combine these three promises into a single promise that
+    // resolves when all of the individual operations complete
+    $comboPromise = After\all([$a, $b, $c]);
+
+    // Wait for the three parallel operations to complete
+    list($a, $b, $c) = $comboPromise->wait();
+    var_dump($a, $b, $c);
+
+    /*
+    int(3)
+    int(42)
+    int(12)
+    */
+
+} catch (Exception $e) {
+    printf("Something went wrong:\n\n%s\n", $e->getMessage());
+}
 ```
