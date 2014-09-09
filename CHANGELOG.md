@@ -1,5 +1,9 @@
-v0.7.0-dev
-----------
+### master
+
+- n/a
+
+v0.7.0
+------
 
 - Use completely refactored (new) After dependency
 - Allow for custom task progress updates via `After\Promise` API
