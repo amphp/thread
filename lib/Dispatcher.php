@@ -50,8 +50,8 @@ class Dispatcher {
     private $now;
     private $isStarted = false;
 
-    public function __construct(Reactor $reactor) {
-        $this->reactor = $reactor;
+    public function __construct(Reactor $reactor = null) {
+        $this->reactor = $reactor ?: \Alert\reactor();
         $this->nextId = PHP_INT_MAX * -1;
         $this->workerStartTasks = new \SplObjectStorage;
         $this->taskReflection = new \ReflectionClass('Amp\Task');
