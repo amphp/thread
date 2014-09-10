@@ -1,4 +1,4 @@
-AMP: Async Multi-threading in PHP (5.4+)
+AMP: Async Multi-Threading in PHP (5.4+)
 ----------------------------------------
 
 Amp parallelizes synchronous PHP function calls to worker thread pools in non-blocking applications.
@@ -12,9 +12,48 @@ find libs for use inside non-blocking event loops. Beyond this limitation there 
 (like filesystem IO) which don't play nice with the non-blocking paradigm. Amp exposes threaded
 concurrency in a non-blocking way to execute tasks in worker threads.
 
-> **NOTE:** Amp isn't really intended for use in a PHP web SAPI environment. It doesn't make sense
-to fire up a new thread pool that internally uses sockets for inter-thread communication on each
-request in a web environment. It's designed for use in CLI environments.
+> **NOTE:** Amp isn't intended for use in PHP web SAPI environments. It doesn't make sense
+to fire up a new thread pool and socket streams for inter-thread communication for each and every
+request in a web environment. The library is designed for use in CLI applications.
+
+**Example**
+
+```php
+<?php
+
+function slowAddition($x, $y) {
+    sleep(1);
+    return $x + $y;
+}
+
+try {
+    $dispatcher = new Amp\Dispatcher;
+
+    $a = $dispatcher->call('slowAddition', 1, 5);
+    $b = $dispatcher->call('slowAddition', 10, 10);
+    $c = $dispatcher->call('slowAddition', 11, 31);
+
+    // Combine these three promises into a single promise that
+    // resolves when all of the individual operations complete
+    $comboPromise = After\all([$a, $b, $c]);
+
+    // Our three calls will complete in one second instead of
+    // three because they all run at the same time
+    list($a, $b, $c) = $comboPromise->wait();
+    var_dump($a, $b, $c);
+
+    /*
+    int(6)
+    int(20)
+    int(42)
+    */
+
+} catch (Exception $e) {
+    printf("Something went wrong:\n\n%s\n", $e->getMessage());
+}
+```
+
+
 
 ### Project Goals
 
@@ -66,7 +105,8 @@ $ composer install
 
 **Advanced Usage**
 
-* [Stackable Tasks](#stackable-tasks)
+* [Threaded Tasks](#threaded-tasks)
+* [Task Progress Updates](#task-progress-updates)
 * [Magic Tasks](#magic-tasks)
 * [Class Autoloading](#class-autoloading)
 * [Naive Wait Parallelization](#naive-wait-parallelization)
@@ -236,7 +276,7 @@ int(42)
 > **IMPORTANT:** In this example we've hardcoded the `MyMultiplier` class definition in the code.
 > There is *no* class autoloading employed. There is no way for `ext/pthreads` to inherit globally
 > registered autoloaders from the main thread. If you require autoloading in your worker threads
-> you *MUST* dispatch a stackable task to define autoloader function(s) in your workers as
+> you *MUST* dispatch a `Threaded` task to define autoloader function(s) in your workers as
 > demonstrated in the [Class Autoloading](#class-autoloading) section of this guide.
 
 
@@ -431,45 +471,43 @@ The full list of available flags can be found in the relevant [pthreads document
 [pthreads-flags]: php.net/manual/en/pthreads.constants.php "pthreads flags"
 
 
+
+
+
+
+
 ### Advanced Usage
 
-#### Stackable Tasks
+#### Threaded Tasks
 
 While Amp abstracts much of the underlying pthreads functionality there are times when low-level
 access is useful. For these scenarios Amp allows the specification of "tasks" extending pthreads
-[`Stackable`][pthreads-stackables]. Stackables allow users to specify arbitrary code in the main
+[`Threaded`][pthreads-threaded]. Threadeds allow users to specify arbitrary code in the main
 thread and use it for execution in worker threads.
 
-> **NOTE:** All `Stackable` classes MUST (per pthreads) specify the abstract `Stackable::run()` method
+> **NOTE:** All `Threaded` classes MUST (per pthreads) specify the abstract `Threaded::run()`
+> method. Your `Threaded` object's `run()` method is the routine that will execute in the worker thread.
+> In order to avoid errors your `Threaded::run()` must call the worker thread's `resolve()` method
+> as shown in the example below. This is how Amp knows what to return from the threaded task.
 
-Instances of your custom `Stackable` may then be passed to the `Dispatcher::execute()` method
+Instances of your custom `Threaded` may then be passed to the `Dispatcher::execute()` method
 for processing.
 
 ```php
 <?php
-use Alert\ReactorFactory, After\Future, Amp\Dispatcher, Amp\Thread;
-
-MyTask extends \Stackable {
+MyTask extends \Threaded {
     public function run() {
         $result = strlen('zanzibar');
 
-        // Stackables must register their results using either of the
-        // Amp\Thread::SUCCESS or Amp\Thread::FAILURE codes:
-        $this->worker->resolve(Thread::SUCCESS, $result);
+        // Custom tasks must register their results using either
+        // Amp\Thread::SUCCESS or Amp\Thread::FAILURE:
+        $this->worker->resolve(Amp\Thread::SUCCESS, $result);
     }
 }
 
 (new Alert\NativeReactor)->run(function($reactor) {
     $dispatcher = new Amp\Dispatcher($reactor);
-
-    $promise = $dispatcher->call('strlen', 'zanzibar');
-    $promise->when(function($error, $result) {
-        assert($error === null);
-        assert($result === 8);
-    });
-
-    // Using execute() to dispatch our custom strlen task
-    $promise = $dispatcher->execute(new MyTask); // task object declared above
+    $promise = $dispatcher->execute(new MyTask); // <-- our custom task
     $promise->when(function($error, $result) use ($reactor) {
         assert($error === null);
         assert($result === 8);
@@ -478,7 +516,53 @@ MyTask extends \Stackable {
 });
 ```
 
-[pthreads-stackables]: http://us1.php.net/manual/en/class.stackable.php "pthreads Stackable"
+[pthreads-threaded]: http://us1.php.net/manual/en/class.threaded.php "pthreads Threaded"
+
+
+#### Task Progress Updates
+
+Because the `After` concurrency primitives support incremental progress updates we can expose this
+functionality in our custom `Threaded` tasks. In the same way we use the worker's `resolve()`
+method to indicate task completion we can use `progress()` to notify our main thread incrementally
+before the task actually completes. Below we show how to send/receive progress updates in our
+threaded tasks.
+
+```php
+<?php
+
+MyIncrementalTask extends \Threaded {
+    public function run() {
+        $this->worker->progress(1);
+        sleep(1);
+        $this->worker->progress(2);
+        sleep(1);
+        $this->worker->progress(3);
+        sleep(1);
+        $this->worker->resolve(Amp\Thread::SUCCESS, 42);
+    }
+}
+
+$dispatcher = new Amp\Dispatcher;
+$task = new MyIncrementalTask;
+$promise = $dispatcher->execute($task);
+
+// Watch for progress updates from our task
+$promise->watch(function($updateData) {
+    printf("Progress update: %s\n", $updateData);
+});
+
+// Wait for the final task result
+printf("Final task result: %s\n", $promise->wait());
+```
+
+The above code will output the following:
+
+```
+Progress update: 1
+Progress update: 2
+Progress update: 3
+Final task result: 42
+```
 
 
 
@@ -490,7 +574,7 @@ MyTask extends \Stackable {
 ```php
 <?php
 
-class MyTask extends \Stackable {
+class MyTask extends \Threaded {
     public function run() {
         // do something here
     }
@@ -522,7 +606,7 @@ inclusion when workers are spawned:
 ```php
 <?php
 
-class MyAutoloadTask extends \Stackable {
+class MyAutoloadTask extends \Threaded {
     public function run() {
         spl_autoload_register(function($class) {
             if (0 === strpos($class, 'MyNamespace\\')) {
