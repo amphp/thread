@@ -64,7 +64,7 @@ try {
 ### Requirements
 
 * [PHP 5.4+][php-net] You'll need PHP.
-* [ext/pthreads][pthreads] The pthreads extension ([windows .DLLs here][win-pthreads-dlls])
+* [pecl/pthreads][pthreads] The pthreads extension ([windows .DLLs here][win-pthreads-dlls])
 * [rdlowrey/alert][alert] Alert IO/events
 * [rdlowrey/after][after] Simple concurrency primitives for use with Alert reactors
 
@@ -98,6 +98,7 @@ $ composer install
 * [Static Methods](#static-methods)
 * [Magic Calls](#magic-calls)
 * [Error Handling](#error-handling)
+* [Parameters and Returns](#parameters-and-returns)
 * [Task Timeouts](#task-timeouts)
 * [Pool Size](#pool-size)
 * [Thread Execution Limits](#thread-execution-limits)
@@ -274,7 +275,7 @@ int(42)
 ```
 
 > **IMPORTANT:** In this example we've hardcoded the `MyMultiplier` class definition in the code.
-> There is *no* class autoloading employed. There is no way for `ext/pthreads` to inherit globally
+> There is *no* class autoloading employed. There is no way for `pecl/pthreads` to inherit globally
 > registered autoloaders from the main thread. If you require autoloading in your worker threads
 > you *MUST* dispatch a `Threaded` task to define autoloader function(s) in your workers as
 > demonstrated in the [Class Autoloading](#class-autoloading) section of this guide.
@@ -357,6 +358,27 @@ function myFatalFunction() {
     });
 });
 ```
+
+#### Parameters and Returns
+
+While Amp tries as much as possible to hide the implementation details of the underlying pthreads
+extension, your parallel operations are still bound by the constraints and limitations of pthreads.
+The primary limitations arising from this condition center around the raw parameters and return values
+in your parallelized calls. The main thing you need to remember is:
+
+> **IMPORTANT:** All individual parameters and returns (with the exception of resources) will be
+> serialized by pthreads for transport between the main thread and worker threads.
+
+This condition cannot be overemphasized. The individual parameters MUST either be capable of
+surviving serialization or they MUST be resource primitives. There is one major pitfall with this
+constraint:
+
+> **GOTCHYA:** Be careful not to wrap resources inside arrays as the array will be serialized and
+> the individual resource elements will not survive the trip over a thread boundary.
+
+As long as you pass/return resource parameters directly (as opposed to wrapped inside arrays
+or objects) your parallel functions should "just work."
+
 
 #### Task Timeouts
 
