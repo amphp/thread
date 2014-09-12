@@ -614,7 +614,7 @@ class MyTask extends \Threaded {
 ```
 
 
-#### Class Autoloading and Compposer
+#### Class Autoloading and Composer
 
 There is no way for pthreads workers to inherit global autoload settings. As a result, if calls
 or task executions require class autoloading users must make provisions to register autoload
