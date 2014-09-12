@@ -109,7 +109,7 @@ $ composer install
 * [Threaded Tasks](#threaded-tasks)
 * [Task Progress Updates](#task-progress-updates)
 * [Magic Tasks](#magic-tasks)
-* [Class Autoloading](#class-autoloading)
+* [Class Autoloading and Composer](#class-autoloading-and-composer)
 * [Naive Wait Parallelization](#naive-wait-parallelization)
 * [Parallelization Combinators](#parallelization-combinators)
 
@@ -278,7 +278,7 @@ int(42)
 > There is *no* class autoloading employed. There is no way for `pecl/pthreads` to inherit globally
 > registered autoloaders from the main thread. If you require autoloading in your worker threads
 > you *MUST* dispatch a `Threaded` task to define autoloader function(s) in your workers as
-> demonstrated in the [Class Autoloading](#class-autoloading) section of this guide.
+> demonstrated in the [Class Autoloading](#class-autoloading-and-composer) section of this guide.
 
 
 #### Magic Calls
@@ -614,7 +614,7 @@ class MyTask extends \Threaded {
 ```
 
 
-#### Class Autoloading
+#### Class Autoloading and Compposer
 
 There is no way for pthreads workers to inherit global autoload settings. As a result, if calls
 or task executions require class autoloading users must make provisions to register autoload
@@ -662,6 +662,25 @@ $dispatcher->addStartTask($myStartTask);
 
 $dispatcher->removeStartTask($myStartTask);
 ```
+
+**Composer**
+
+Using a generated autoloader from composer is no different from registering any other autoloader:
+
+```php
+<?php
+
+class MyComposerAutoloadTask extends \Threaded {
+    public function run() {
+        require '/path/to/vendor/autoload.php';
+    }
+}
+
+$dispatcher = new Dispatcher;
+$dispatcher->addStartTask(new MyComposerAutoloadTask);
+```
+
+That's it!
 
 
 #### Naive Wait Parallelization
