@@ -1,7 +1,7 @@
 {
-    "name": "rdlowrey/amp",
-    "homepage": "https://github.com/rdlowrey/Amp",
-    "description": "Asynchronous Multiprocessing for PHP applications.",
+    "name": "amphp/thread",
+    "homepage": "https://github.com/amphp/thread",
+    "description": "Non-blocking thread pool task dispatch",
     "keywords": ["async", "concurrency", "parallelization", "non-blocking", "threads", "pthreads"],
     "license": "MIT",
     "authors": [
@@ -12,13 +12,28 @@
       }
     ],
     "require": {
-        "php": ">=5.4.0",
-        "rdlowrey/alert": "~0.10.0",
-        "rdlowrey/after": "~0.2.0"
+        "php": ">=5.5.0",
+        "amphp/amp": "dev-master"
     },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/amphp/amp.git"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/amphp/thread.git"
+        }
+    ],
     "autoload": {
         "psr-4": {
             "Amp\\": "lib/"
         }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Amp\\Test": "test/"
+        },
+        "files": ["test/Thread/fixtures.php"]
     }
 }

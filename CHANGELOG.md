@@ -1,6 +1,10 @@
 ### master
 
-- n/a
+- Migrate repo to new amphp/thread repo
+
+> **BC Breaks:**
+
+- @TODO
 
 v0.7.0
 ------

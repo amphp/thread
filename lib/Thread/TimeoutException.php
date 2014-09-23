@@ -1,5 +1,5 @@
 <?php
 
-namespace Amp;
+namespace Amp\Thread;
 
 class TimeoutException extends DispatchException {}

@@ -1,11 +1,11 @@
 <?php
 
-namespace Amp;
+namespace Amp\Thread;
 
-use Alert\Reactor;
-use After\Promise;
-use After\Future;
-use After\Failure;
+use Amp\Reactor;
+use Amp\Promise;
+use Amp\Failure;
+use Amp\Future;
 
 class Dispatcher {
     const OPT_THREAD_FLAGS = 1;
@@ -51,7 +51,7 @@ class Dispatcher {
     private $isStarted = false;
 
     public function __construct(Reactor $reactor = null) {
-        $this->reactor = $reactor ?: \Alert\reactor();
+        $this->reactor = $reactor ?: \Amp\reactor();
         $this->nextId = PHP_INT_MAX * -1;
         $this->workerStartTasks = new \SplObjectStorage;
         $this->taskReflection = new \ReflectionClass('Amp\Task');
@@ -66,7 +66,7 @@ class Dispatcher {
      * @param string $procedure The name of the function to invoke
      * @param mixed $varArgs A variable-length argument list to pass the procedure
      * @throws \InvalidArgumentException if the final parameter is not a valid callback
-     * @return \After\Promise
+     * @return \Amp\Promise
      */
     public function call($procedure, $varArgs = null /*..., $argN*/) {
         if (!is_string($procedure)) {
@@ -90,14 +90,14 @@ class Dispatcher {
     }
 
     /**
-     * Dispatch a pthreads Stackable to the thread pool for processing
+     * Dispatch a pthreads Threaded to the thread pool for processing
      *
      * This method will auto-start the thread pool if workers have not been spawned.
      *
-     * @param \Stackable $task A custom pthreads stackable
-     * @return \After\Promise
+     * @param \Threaded $task A custom pthreads stackable
+     * @return \Amp\Promise
      */
-    public function execute(\Stackable $task) {
+    public function execute(\Threaded $task) {
         if (!$this->isStarted) {
             $this->start();
         }
@@ -111,7 +111,7 @@ class Dispatcher {
         }
     }
 
-    private function acceptNewTask(\Stackable $task) {
+    private function acceptNewTask(\Threaded $task) {
         $future = new Future($this->reactor);
         $promiseId = $this->nextId++;
         $this->queue[$promiseId] = [$future, $task];
@@ -587,32 +587,32 @@ class Dispatcher {
     }
 
     /**
-     * Execute a Stackable task in the thread pool
+     * Execute a Threaded task in the thread pool
      *
-     * @param \Stackable $task
-     * @return \After\Promise
+     * @param \Threaded $task
+     * @return \Amp\Promise
      */
-    public function __invoke(\Stackable $task) {
+    public function __invoke(\Threaded $task) {
         return $this->execute($task);
     }
 
     /**
      * Store a worker task to execute each time a worker spawns
      *
-     * @param \Stackable $task
+     * @param \Threaded $task
      * @return void
      */
-    public function addStartTask(\Stackable $task) {
+    public function addStartTask(\Threaded $task) {
         $this->workerStartTasks->attach($task);
     }
 
     /**
      * Clear a worker task currently stored for execution each time a worker spawns
      *
-     * @param \Stackable $task
+     * @param \Threaded $task
      * @return void
      */
-    public function removeStartTask(\Stackable $task) {
+    public function removeStartTask(\Threaded $task) {
         if ($this->workerStartTasks->contains($task)) {
             $this->workerStartTasks->detach($task);
         }
@@ -623,7 +623,7 @@ class Dispatcher {
      *
      * @param string $method
      * @param array $args
-     * @return \After\Promise
+     * @return \Amp\Promise
      */
     public function __call($method, $args) {
         array_unshift($args, $method);

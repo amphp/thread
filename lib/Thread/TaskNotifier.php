@@ -1,8 +1,8 @@
 <?php
 
-namespace Amp;
+namespace Amp\Thread;
 
-class TaskNotifier extends \Stackable {
+class TaskNotifier extends \Threaded {
 
     public function run() {
         if (!$this->worker->completedPreviousTask()) {

@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp;
+namespace Amp\Thread;
 
 class Worker {
     public $id;

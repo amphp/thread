@@ -1,8 +1,8 @@
 <?php
 
-namespace Amp;
+namespace Amp\Thread;
 
-class Task extends \Stackable {
+class Task extends \Threaded {
 
     private $argCount;
     private $procedure;

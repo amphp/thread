@@ -1,8 +1,11 @@
 <?php
 
-namespace Amp;
+namespace Amp\Test\Thread;
 
-use Alert\NativeReactor, After\Promise, After\Future;
+use Amp\Promise;
+use Amp\Future;
+use Amp\NativeReactor;
+use Amp\Thread\Dispatcher;
 
 class DispatcherTest extends \PHPUnit_Framework_TestCase {
 
