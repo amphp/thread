@@ -1,10 +1,13 @@
-### master
+v0.8.0
+------
 
 - Migrate repo to new amphp/thread repo
 
 > **BC Breaks:**
 
-- @TODO
+- The library now resides at `amphp/thread` (was `rdlowrey/Amp`)
+- All existing references to `Alert` or `After` libs must be refactored to point to the same
+  classes in the new `Amp` repo.
 
 v0.7.0
 ------
