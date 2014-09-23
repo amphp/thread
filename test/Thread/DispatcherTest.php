@@ -114,7 +114,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
             $dispatcher = new Dispatcher($reactor);
             $dispatcher->addStartTask(new TestAutoloaderStackable);
             $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
-            $promise = $dispatcher->call('Amp\Test\Thread\AutoloadableClass::test');
+            $promise = $dispatcher->call('Amp\Test\Thread\AutoloadableClassFixture::test');
             $promise->when(function($error, $result) use ($reactor) {
                 $this->assertEquals(42, $result);
                 $reactor->stop();
