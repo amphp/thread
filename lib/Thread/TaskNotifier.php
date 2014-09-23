@@ -2,7 +2,7 @@
 
 namespace Amp\Thread;
 
-class TaskNotifier extends \Threaded {
+class TaskNotifier extends \Stackable {
 
     public function run() {
         if (!$this->worker->completedPreviousTask()) {

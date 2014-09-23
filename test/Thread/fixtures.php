@@ -4,7 +4,7 @@ namespace Amp\Test\Thread;
 
 use Amp\Promise;
 use Amp\Future;
-use Amp\Thread\Thread
+use Amp\Thread\Thread;
 use Amp\Thread\Dispatcher;
 
 function multiply($x, $y) {

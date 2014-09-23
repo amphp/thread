@@ -32,7 +32,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Amp\\Test": "test/"
+            "Amp\\Test\\": "test/"
         },
         "files": ["test/Thread/fixtures.php"]
     }

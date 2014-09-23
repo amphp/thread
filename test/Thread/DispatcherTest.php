@@ -34,12 +34,12 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
 
     public function testUserlandFunctionDispatch() {
         $dispatcher = new Dispatcher(new NativeReactor);
-        $value = $dispatcher->call('multiply', 6, 7)->wait();
+        $value = $dispatcher->call('Amp\Test\Thread\multiply', 6, 7)->wait();
         $this->assertEquals($value, 42);
     }
 
     /**
-     * @expectedException \Amp\DispatchException
+     * @expectedException \Amp\Thread\DispatchException
      */
     public function testErrorResultReturnedIfInvocationThrows() {
         $dispatcher = new Dispatcher(new NativeReactor);
@@ -47,7 +47,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
     }
 
     /**
-     * @expectedException \Amp\DispatchException
+     * @expectedException \Amp\Thread\DispatchException
      */
     public function testErrorResultReturnedIfInvocationFatals() {
         $dispatcher = new Dispatcher(new NativeReactor);
@@ -112,9 +112,9 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
     public function testNewWorkerIncludes() {
         (new NativeReactor)->run(function($reactor) {
             $dispatcher = new Dispatcher($reactor);
-            $dispatcher->addStartTask(new \TestAutoloaderStackable);
+            $dispatcher->addStartTask(new TestAutoloaderStackable);
             $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
-            $promise = $dispatcher->call('AutoloadableClass::test');
+            $promise = $dispatcher->call('Amp\Test\Thread\AutoloadableClass::test');
             $promise->when(function($error, $result) use ($reactor) {
                 $this->assertEquals(42, $result);
                 $reactor->stop();
@@ -124,6 +124,6 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
 
     public function testStreamingResult() {
         $this->expectOutputString("1\n2\n3\n4\n");
-        (new NativeReactor)->run('testUpdate');
+        (new NativeReactor)->run('Amp\Test\Thread\testUpdate');
     }
 }

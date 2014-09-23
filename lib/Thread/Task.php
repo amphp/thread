@@ -2,7 +2,7 @@
 
 namespace Amp\Thread;
 
-class Task extends \Threaded {
+class Task extends \Stackable {
 
     private $argCount;
     private $procedure;

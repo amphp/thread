@@ -54,7 +54,7 @@ class Dispatcher {
         $this->reactor = $reactor ?: \Amp\reactor();
         $this->nextId = PHP_INT_MAX * -1;
         $this->workerStartTasks = new \SplObjectStorage;
-        $this->taskReflection = new \ReflectionClass('Amp\Task');
+        $this->taskReflection = new \ReflectionClass('Amp\Thread\Task');
         $this->taskNotifier = new TaskNotifier;
     }
 
@@ -90,14 +90,14 @@ class Dispatcher {
     }
 
     /**
-     * Dispatch a pthreads Threaded to the thread pool for processing
+     * Dispatch a pthreads Stackable to the thread pool for processing
      *
      * This method will auto-start the thread pool if workers have not been spawned.
      *
-     * @param \Threaded $task A custom pthreads stackable
+     * @param \Stackable $task A custom pthreads stackable
      * @return \Amp\Promise
      */
-    public function execute(\Threaded $task) {
+    public function execute(\Stackable $task) {
         if (!$this->isStarted) {
             $this->start();
         }
@@ -111,7 +111,7 @@ class Dispatcher {
         }
     }
 
-    private function acceptNewTask(\Threaded $task) {
+    private function acceptNewTask(\Stackable $task) {
         $future = new Future($this->reactor);
         $promiseId = $this->nextId++;
         $this->queue[$promiseId] = [$future, $task];
@@ -208,7 +208,7 @@ class Dispatcher {
 
         $this->ipcUri = sprintf('%s://%s', $protocol, $serverName);
         $this->ipcServer = $server;
-        $this->ipcAcceptWatcher = $this->reactor->onReadable($server, function($watcherId, $server) {
+        $this->ipcAcceptWatcher = $this->reactor->onReadable($server, function($reactor, $watcherId, $server) {
             $this->acceptIpcClient($server);
         });
     }
@@ -245,7 +245,7 @@ class Dispatcher {
 
         $ipcClientId = (int) $ipcClient;
         stream_set_blocking($ipcClient, false);
-        $readWatcher = $this->reactor->onReadable($ipcClient, function($watcherId, $ipcClient)  {
+        $readWatcher = $this->reactor->onReadable($ipcClient, function($reactor, $watcherId, $ipcClient)  {
             $this->onPendingReadableIpcClient($ipcClient);
         });
 
@@ -587,32 +587,32 @@ class Dispatcher {
     }
 
     /**
-     * Execute a Threaded task in the thread pool
+     * Execute a Stackable task in the thread pool
      *
-     * @param \Threaded $task
+     * @param \Stackable $task
      * @return \Amp\Promise
      */
-    public function __invoke(\Threaded $task) {
+    public function __invoke(\Stackable $task) {
         return $this->execute($task);
     }
 
     /**
      * Store a worker task to execute each time a worker spawns
      *
-     * @param \Threaded $task
+     * @param \Stackable $task
      * @return void
      */
-    public function addStartTask(\Threaded $task) {
+    public function addStartTask(\Stackable $task) {
         $this->workerStartTasks->attach($task);
     }
 
     /**
      * Clear a worker task currently stored for execution each time a worker spawns
      *
-     * @param \Threaded $task
+     * @param \Stackable $task
      * @return void
      */
-    public function removeStartTask(\Threaded $task) {
+    public function removeStartTask(\Stackable $task) {
         if ($this->workerStartTasks->contains($task)) {
             $this->workerStartTasks->detach($task);
         }
