@@ -41,10 +41,10 @@ class TestAutoloaderStackable extends \Stackable {
 
 class TestStreamStackable extends \Stackable {
     public function run() {
-        $this->worker->updateProgress(1);
-        $this->worker->updateProgress(2);
-        $this->worker->updateProgress(3);
-        $this->worker->updateProgress(4);
+        $this->worker->update(1);
+        $this->worker->update(2);
+        $this->worker->update(3);
+        $this->worker->update(4);
         $this->worker->registerResult(Thread::SUCCESS, null);
     }
 }
