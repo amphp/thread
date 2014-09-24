@@ -2,7 +2,7 @@
     "name": "amphp/thread",
     "homepage": "https://github.com/amphp/thread",
     "description": "Non-blocking thread pool task dispatch",
-    "keywords": ["async", "concurrency", "parallelization", "non-blocking", "threads", "pthreads"],
+    "keywords": ["async", "concurrency", "parallelization", "non-blocking", "threads", "pthreads", "amp"],
     "license": "MIT",
     "authors": [
       {
@@ -15,25 +15,15 @@
         "php": ">=5.5.0",
         "amphp/amp": "~0.11"
     },
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/amphp/amp.git"
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/amphp/thread.git"
-        }
-    ],
     "autoload": {
         "psr-4": {
-            "Amp\\": "lib/"
+            "Amp\\Thread\\": "lib/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Amp\\Test\\": "test/"
+            "Amp\\Thread\\Test\\": "test/"
         },
-        "files": ["test/Thread/fixtures.php"]
+        "files": ["test/fixtures.php"]
     }
 }

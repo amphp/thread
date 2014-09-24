@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Test\Thread;
+namespace Amp\Thread\Test;
 
 class AutoloadableClassFixture {
     public static function test() {

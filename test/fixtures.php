@@ -1,6 +1,6 @@
 <?php
 
-namespace Amp\Test\Thread;
+namespace Amp\Thread\Test;
 
 use Amp\Promise;
 use Amp\Future;
