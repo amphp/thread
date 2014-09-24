@@ -13,7 +13,7 @@
     ],
     "require": {
         "php": ">=5.5.0",
-        "amphp/amp": "dev-master"
+        "amphp/amp": "~0.11"
     },
     "repositories": [
         {
