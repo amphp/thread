@@ -12,8 +12,8 @@
       }
     ],
     "require": {
-        "php": ">=5.5.0",
-        "amphp/amp": "~0.11"
+        "php": ">=5.4.0",
+        "amphp/amp": "~0.12"
     },
     "autoload": {
         "psr-4": {
