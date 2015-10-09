@@ -2,8 +2,7 @@
 
 namespace Amp\Thread;
 
-class TaskNotifier extends \Stackable {
-
+class TaskNotifier extends \Volatile implements \Collectable {
     public function run() {
         if (!$this->worker->completedPreviousTask()) {
             $this->registerErrorResult();
@@ -30,10 +29,13 @@ class TaskNotifier extends \Stackable {
             $data = sprintf("%s in %s on line %d", $error['message'], $error['file'], $error['line']);
         } else {
             $resultCode = Thread::FAILURE;
-            $data = "Stackable tasks MUST register results with the worker thread";
+            $data = "Threaded tasks MUST register results with the worker thread";
         }
 
         $this->worker->resolve($resultCode, $data);
     }
 
+    public function isGarbage(): bool {
+        return $this->isTerminated();
+    }
 }

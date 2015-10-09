@@ -2,10 +2,9 @@
 
 namespace Amp\Thread;
 
+use Amp\Deferred;
 use Amp\Reactor;
-use Amp\Promise;
 use Amp\Failure;
-use Amp\Future;
 
 class Dispatcher {
     const OPT_THREAD_FLAGS = 1;
@@ -17,6 +16,7 @@ class Dispatcher {
     const OPT_IPC_URI = 7;
     const OPT_UNIX_IPC_DIR = 8;
 
+    /** @var Reactor */
     private $reactor;
     private $ipcUri;
     private $ipcServer;
@@ -50,8 +50,8 @@ class Dispatcher {
     private $now;
     private $isStarted = false;
 
-    public function __construct(Reactor $reactor = null) {
-        $this->reactor = $reactor ?: \Amp\reactor();
+    public function __construct() {
+        $this->reactor = \Amp\reactor();
         $this->nextId = PHP_INT_MAX * -1;
         $this->workerStartTasks = new \SplObjectStorage;
         $this->taskReflection = new \ReflectionClass('Amp\Thread\Task');
@@ -90,14 +90,14 @@ class Dispatcher {
     }
 
     /**
-     * Dispatch a pthreads Stackable to the thread pool for processing
+     * Dispatch a pthreads Collectable to the thread pool for processing
      *
      * This method will auto-start the thread pool if workers have not been spawned.
      *
-     * @param \Stackable $task A custom pthreads stackable
+     * @param \Collectable $task A custom pthreads collectable
      * @return \Amp\Promise
      */
-    public function execute(\Stackable $task) {
+    public function execute(\Collectable $task) {
         if (!$this->isStarted) {
             $this->start();
         }
@@ -111,10 +111,10 @@ class Dispatcher {
         }
     }
 
-    private function acceptNewTask(\Stackable $task) {
-        $future = new Future($this->reactor);
+    private function acceptNewTask(\Collectable $task) {
+        $promisor = new Deferred($this->reactor);
         $promiseId = $this->nextId++;
-        $this->queue[$promiseId] = [$future, $task];
+        $this->queue[$promiseId] = [$promisor, $task];
         $this->outstandingTaskCount++;
 
         if ($this->isPeriodWatcherEnabled === false) {
@@ -134,12 +134,12 @@ class Dispatcher {
             $this->spawnWorker();
         }
 
-        return $future->promise();
+        return $promisor->promise();
     }
 
     private function dequeueNextTask() {
         $promiseId = key($this->queue);
-        list($future, $task) = $this->queue[$promiseId];
+        list($promisor, $task) = $this->queue[$promiseId];
 
         unset($this->queue[$promiseId]);
 
@@ -148,7 +148,7 @@ class Dispatcher {
         $this->promiseWorkerMap[$promiseId] = $worker;
 
         $worker->promiseId = $promiseId;
-        $worker->future = $future;
+        $worker->promisor = $promisor;
         $worker->task = $task;
         $worker->thread->stack($task);
         $worker->thread->stack($this->taskNotifier);
@@ -160,7 +160,7 @@ class Dispatcher {
      *
      * No tasks will be dispatched until Dispatcher::start is invoked.
      *
-     * @return \Amp\Dispatcher Returns the current object instance
+     * @return \Amp\Thread\Dispatcher Returns the current object instance
      */
     public function start() {
         if (!$this->isStarted) {
@@ -208,7 +208,7 @@ class Dispatcher {
 
         $this->ipcUri = sprintf('%s://%s', $protocol, $serverName);
         $this->ipcServer = $server;
-        $this->ipcAcceptWatcher = $this->reactor->onReadable($server, function($reactor, $watcherId, $server) {
+        $this->ipcAcceptWatcher = $this->reactor->onReadable($server, function($watcherId, $server) {
             $this->acceptIpcClient($server);
         });
     }
@@ -245,7 +245,7 @@ class Dispatcher {
 
         $ipcClientId = (int) $ipcClient;
         stream_set_blocking($ipcClient, false);
-        $readWatcher = $this->reactor->onReadable($ipcClient, function($reactor, $watcherId, $ipcClient)  {
+        $readWatcher = $this->reactor->onReadable($ipcClient, function($watcherId, $ipcClient)  {
             $this->onPendingReadableIpcClient($ipcClient);
         });
 
@@ -372,8 +372,8 @@ class Dispatcher {
             $this->spawnWorker();
         } else {
             $this->outstandingTaskCount--;
-            list($future) = $this->queue[$promiseId];
-            $future->fail($error);
+            list($promisor) = $this->queue[$promiseId];
+            $promisor->fail($error);
             unset($this->queue[$promiseId]);
         }
     }
@@ -411,7 +411,7 @@ class Dispatcher {
                 $error = new TaskException($data);
                 break;
             case Thread::UPDATE:
-                $worker->future->update($data);
+                $worker->promisor->update($data);
                 return; // return here because the task is not yet complete
             default:
                 $mustKill = true;
@@ -427,9 +427,9 @@ class Dispatcher {
         $worker->tasksExecuted++;
 
         if ($error) {
-            $worker->future->fail($error);
+            $worker->promisor->fail($error);
         } else {
-            $worker->future->succeed($data);
+            $worker->promisor->succeed($data);
         }
 
         $this->afterTaskCompletion($worker, $mustKill);
@@ -444,7 +444,7 @@ class Dispatcher {
                 $this->promiseWorkerMap[$promiseId],
                 $this->promiseTimeoutMap[$promiseId]
             );
-            $worker->promiseId = $worker->promise = $worker->task = null;
+            $worker->promiseId = $worker->promisor = $worker->task = null;
             $this->availableWorkers[$worker->id] = $worker;
         }
 
@@ -474,7 +474,7 @@ class Dispatcher {
      * @param string $option A case-insensitive option key
      * @param mixed $value The value to assign
      * @throws \DomainException On unknown option key
-     * @return \Amp\Dispatcher Returns the current object instance
+     * @return \Amp\Thread\Dispatcher Returns the current object instance
      */
     public function setOption($option, $value) {
         switch ($option) {
@@ -504,7 +504,7 @@ class Dispatcher {
     }
 
     private function setIdleWorkerTimeout($seconds) {
-        $this->idleWorkerTimeout = filter_var($int, FILTER_VALIDATE_INT, ['options' => [
+        $this->idleWorkerTimeout = filter_var($seconds, FILTER_VALIDATE_INT, ['options' => [
             'min_range' => 1,
             'default' => 1
         ]]);
@@ -587,32 +587,32 @@ class Dispatcher {
     }
 
     /**
-     * Execute a Stackable task in the thread pool
+     * Execute a Collectable task in the thread pool
      *
-     * @param \Stackable $task
+     * @param \Collectable $task
      * @return \Amp\Promise
      */
-    public function __invoke(\Stackable $task) {
+    public function __invoke(\Collectable $task) {
         return $this->execute($task);
     }
 
     /**
      * Store a worker task to execute each time a worker spawns
      *
-     * @param \Stackable $task
+     * @param \Collectable $task
      * @return void
      */
-    public function addStartTask(\Stackable $task) {
+    public function addStartTask(\Collectable $task) {
         $this->workerStartTasks->attach($task);
     }
 
     /**
      * Clear a worker task currently stored for execution each time a worker spawns
      *
-     * @param \Stackable $task
+     * @param \Collectable $task
      * @return void
      */
-    public function removeStartTask(\Stackable $task) {
+    public function removeStartTask(\Collectable $task) {
         if ($this->workerStartTasks->contains($task)) {
             $this->workerStartTasks->detach($task);
         }
@@ -649,7 +649,7 @@ class Dispatcher {
     private function unlinkUnixSocketPath($absoluteUri) {
         $path = substr($absoluteUri, 7);
         if (file_exists($path)) {
-            @unlink($unixPath);
+            @unlink($path);
         }
     }
 }

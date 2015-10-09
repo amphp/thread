@@ -2,8 +2,7 @@
 
 namespace Amp\Thread;
 
-class Task extends \Stackable {
-
+class Task extends \Threaded implements \Collectable {
     private $argCount;
     private $procedure;
 
@@ -37,7 +36,9 @@ class Task extends \Stackable {
             }
 
             $resultCode = Thread::SUCCESS;
-
+        } catch (\Throwable $e) {
+            $resultCode = Thread::FAILURE;
+            $result = $e->__toString();
         } catch (\Exception $e) {
             $resultCode = Thread::FAILURE;
             $result = $e->__toString();
@@ -46,4 +47,7 @@ class Task extends \Stackable {
         $this->worker->resolve($resultCode, $result);
     }
 
+    public function isGarbage(): bool {
+        return $this->isTerminated();
+    }
 }

@@ -3,7 +3,6 @@
 namespace Amp\Thread;
 
 class Thread extends \Worker {
-
     const SUCCESS = '$';
     const FAILURE = '!';
     const FATAL = 'x';
@@ -41,7 +40,7 @@ class Thread extends \Worker {
         $this->ipcSocket = $ipcSocket;
     }
 
-    private function resolve($resultCode, $data) {
+    public function resolve($resultCode, $data) {
         switch ($resultCode) {
             case self::SUCCESS: // fallthrough
             case self::FAILURE: // fallthrough
@@ -56,17 +55,17 @@ class Thread extends \Worker {
         $this->resultCodes[] = $resultCode;
     }
 
-    private function update($data) {
+    public function update($data) {
         $this->results[] = $data;
         $this->resultCodes[] = self::UPDATE;
         $this->notifyDispatcher();
     }
 
-    private function completedPreviousTask() {
+    public function completedPreviousTask() {
         return ($resultCount = count($this->results)) && $resultCount === count($this->resultCodes);
     }
 
-    private function notifyDispatcher() {
+    public function notifyDispatcher() {
         if (!@fwrite($this->ipcSocket, '.')) {
             // Our IPC socket has died somehow ... all we can do now is exit.
             exit(1);
