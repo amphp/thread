@@ -77,7 +77,7 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
     }
 
     public function testCount() {
-        \Amp\reactor()->run(function() {
+        \Amp\run(function() {
             $dispatcher = new Dispatcher;
 
             // Make sure repeated calls get queued behind the first call

@@ -2,6 +2,6 @@
 
 namespace Amp\Thread;
 
-class SharedData extends \Collectable {
+class SharedData extends \Threaded {
     public function run() {}
 }

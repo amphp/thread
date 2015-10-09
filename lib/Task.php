@@ -2,7 +2,7 @@
 
 namespace Amp\Thread;
 
-class Task extends \Collectable {
+class Task extends \Threaded implements \Collectable {
     private $argCount;
     private $procedure;
 
@@ -36,7 +36,6 @@ class Task extends \Collectable {
             }
 
             $resultCode = Thread::SUCCESS;
-
         } catch (\Throwable $e) {
             $resultCode = Thread::FAILURE;
             $result = $e->__toString();
@@ -46,5 +45,9 @@ class Task extends \Collectable {
         }
 
         $this->worker->resolve($resultCode, $result);
+    }
+
+    public function isGarbage(): bool {
+        return $this->isTerminated();
     }
 }
