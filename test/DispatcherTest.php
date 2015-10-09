@@ -2,20 +2,20 @@
 
 namespace Amp\Thread\Test;
 
-use Amp\Promise;
-use Amp\Future;
 use Amp\NativeReactor;
 use Amp\Thread\Dispatcher;
 
 class DispatcherTest extends \PHPUnit_Framework_TestCase {
+    public function setUp() {
+        \Amp\reactor(new NativeReactor);
+    }
 
     /**
      * @dataProvider provideBadOptionKeys
      * @expectedException \DomainException
      */
     public function testSetOptionThrowsOnUnknownOption($badOptionName) {
-        $reactor = new NativeReactor;
-        $dispatcher = new Dispatcher($reactor);
+        $dispatcher = new Dispatcher;
         $dispatcher->setOption($badOptionName, 42);
     }
 
@@ -27,14 +27,14 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
     }
 
     public function testNativeFunctionDispatch() {
-        $dispatcher = new Dispatcher(new NativeReactor);
-        $value = $dispatcher->call('strlen', 'zanzibar!')->wait();
+        $dispatcher = new Dispatcher;
+        $value = \Amp\wait($dispatcher->call('strlen', 'zanzibar!'));
         $this->assertEquals(9, $value);
     }
 
     public function testUserlandFunctionDispatch() {
-        $dispatcher = new Dispatcher(new NativeReactor);
-        $value = $dispatcher->call('Amp\Thread\Test\multiply', 6, 7)->wait();
+        $dispatcher = new Dispatcher;
+        $value = \Amp\wait($dispatcher->call('Amp\Thread\Test\multiply', 6, 7));
         $this->assertEquals($value, 42);
     }
 
@@ -42,22 +42,20 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
      * @expectedException \Amp\Thread\DispatchException
      */
     public function testErrorResultReturnedIfInvocationThrows() {
-        $dispatcher = new Dispatcher(new NativeReactor);
-        $dispatcher->call('exception')->wait(); // should throw
+        $dispatcher = new Dispatcher;
+        \Amp\wait($dispatcher->call('exception')); // should throw
     }
 
     /**
      * @expectedException \Amp\Thread\DispatchException
      */
     public function testErrorResultReturnedIfInvocationFatals() {
-        $dispatcher = new Dispatcher(new NativeReactor);
-        $dispatcher->call('fatal')->wait(); // should throw
+        $dispatcher = new Dispatcher;
+        \Amp\wait($dispatcher->call('fatal')); // should throw
     }
 
     public function testNextTaskDequeuedOnCompletion() {
-        $reactor = new NativeReactor;
-        $dispatcher = new Dispatcher($reactor);
-
+        $dispatcher = new Dispatcher;
         $count = 0;
 
         // Make sure the second call gets queued
@@ -66,21 +64,21 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
             $count++;
         });
 
-        $dispatcher->call('strlen', 'zanzibar')->when(function($error, $result) use ($reactor, &$count) {
+        $dispatcher->call('strlen', 'zanzibar')->when(function($error, $result) use (&$count) {
             $count++;
             fwrite(STDERR, $error);
             $this->assertTrue(is_null($error));
             $this->assertEquals(8, $result);
             $this->assertEquals(2, $count);
-            $reactor->stop();
+            \Amp\stop();
         });
 
-        $reactor->run();
+        \Amp\run();
     }
 
     public function testCount() {
-        (new NativeReactor)->run(function($reactor) {
-            $dispatcher = new Dispatcher($reactor);
+        \Amp\reactor()->run(function() {
+            $dispatcher = new Dispatcher;
 
             // Make sure repeated calls get queued behind the first call
             $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
@@ -95,8 +93,8 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
             $promise = $dispatcher->call('strlen', 'zanzibar');
             $this->assertEquals(3, $dispatcher->count());
 
-            $promise->when(function($error, $result) use ($reactor, $dispatcher) {
-                $reactor->stop();
+            $promise->when(function($error, $result) use ($dispatcher) {
+                \Amp\stop();
                 $this->assertTrue(is_null($error));
                 $this->assertEquals(8, $result);
                 $count = $dispatcher->count();
@@ -110,20 +108,20 @@ class DispatcherTest extends \PHPUnit_Framework_TestCase {
     }
 
     public function testNewWorkerIncludes() {
-        (new NativeReactor)->run(function($reactor) {
-            $dispatcher = new Dispatcher($reactor);
-            $dispatcher->addStartTask(new TestAutoloaderStackable);
+        \Amp\reactor()->run(function() {
+            $dispatcher = new Dispatcher;
+            $dispatcher->addStartTask(new TestAutoloaderCollectable);
             $dispatcher->setOption(Dispatcher::OPT_POOL_SIZE_MAX, 1);
             $promise = $dispatcher->call('Amp\Thread\Test\AutoloadableClassFixture::test');
-            $promise->when(function($error, $result) use ($reactor) {
+            $promise->when(function($error, $result) {
                 $this->assertEquals(42, $result);
-                $reactor->stop();
+                \Amp\stop();
             });
         });
     }
 
     public function testStreamingResult() {
         $this->expectOutputString("1\n2\n3\n4\n");
-        (new NativeReactor)->run('Amp\Thread\Test\testUpdate');
+        \Amp\reactor()->run('Amp\Thread\Test\testUpdate');
     }
 }

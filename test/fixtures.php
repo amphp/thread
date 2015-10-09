@@ -2,8 +2,6 @@
 
 namespace Amp\Thread\Test;
 
-use Amp\Promise;
-use Amp\Future;
 use Amp\Thread\Thread;
 use Amp\Thread\Dispatcher;
 
@@ -19,19 +17,19 @@ function fatal() {
     $nonexistentObj->nonexistentMethod();
 }
 
-class FatalStackable extends \Stackable {
+class FatalCollectable extends \Collectable {
     public function run() {
         $nonexistentObj->nonexistentMethod();
     }
 }
 
-class ThrowingStackable extends \Stackable {
+class ThrowingCollectable extends \Collectable {
     public function run() {
         throw new \Exception('test');
     }
 }
 
-class TestAutoloaderStackable extends \Stackable {
+class TestAutoloaderCollectable extends \Collectable {
     public function run() {
         spl_autoload_register(function() {
             require_once __DIR__ . '/AutoloadableClassFixture.php';
@@ -39,7 +37,7 @@ class TestAutoloaderStackable extends \Stackable {
     }
 }
 
-class TestStreamStackable extends \Stackable {
+class TestStreamCollectable extends \Collectable {
     public function run() {
         $this->worker->update(1);
         $this->worker->update(2);
@@ -49,14 +47,14 @@ class TestStreamStackable extends \Stackable {
     }
 }
 
-function testUpdate($reactor) {
-    $dispatcher = new Dispatcher($reactor);
-    $promise = $dispatcher->execute(new TestStreamStackable);
+function testUpdate() {
+    $dispatcher = new Dispatcher;
+    $promise = $dispatcher->execute(new TestStreamCollectable);
     $promise->watch(function($update) {
         echo "$update\n";
     });
-    $promise->when(function($error, $result) use ($reactor) {
+    $promise->when(function($error, $result) {
         assert($result === null);
-        $reactor->stop();
+        \Amp\stop();
     });
 }

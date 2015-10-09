@@ -11,7 +11,7 @@ class Worker {
     public $thread;
     public $task;
     public $promiseId;
-    public $future;
+    public $promisor;
     public $tasksExecuted = 0;
     public $lastStackedAt;
 }
