@@ -218,7 +218,7 @@ class Dispatcher {
         $resultCodes = new SharedData;
         $thread = new Thread($results, $resultCodes, $this->ipcUri);
 
-        if (!$thread->start()) {
+        if (!$thread->start($this->threadStartFlags)) {
             throw new \RuntimeException(
                 'Worker thread failed to start'
             );
