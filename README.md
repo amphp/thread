@@ -165,7 +165,7 @@ The simplest way to use the thread library is to dispatch calls to global functi
         $result = (yield $dispatcher->call('strlen', 'zanzibar!'));
         printf("Woot! strlen('zanzibar') === %d", $result);
     } catch (Exception $e) {
-        printf("Something went terribly wrong: %s\n", $e);
+        printf("Something went terribly wrong: %s\n", $e->getMessage());
     } finally {
         // Stop the event loop so we don't sit around forever
         // after our result comes back
